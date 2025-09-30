@@ -1,0 +1,28 @@
+{
+  "users": [
+    {
+      "id": "user123",
+      "name": "Test User",
+      "email": "test@example.com",
+      "password": "password123",
+      "otp": "123456",
+      "otpExpiry": "2023-12-31T23:59:59Z"
+    },
+    {
+      "id": "user456",
+      "name": "John Doe",
+      "email": "john@example.com",
+      "password": "securepass",
+      "otp": "654321",
+      "otpExpiry": "2023-12-31T23:59:59Z"
+    },
+    {
+      "id": "user789",
+      "name": "Jane Smith",
+      "email": "jane@example.com",
+      "password": "janepass123",
+      "otp": "987654",
+      "otpExpiry": "2023-12-31T23:59:59Z"
+    }
+  ]
+}
