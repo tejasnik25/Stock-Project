@@ -2,10 +2,11 @@
 
 import { useState, useEffect } from 'react';
 import Button from '@/components/ui/Button';
-import Input from '@/components/ui/Input';
-import Switch from '@/components/ui/switch';
+import  Input  from '@/components/ui/Input';
+import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import Card, { CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
+import Card from '@/components/ui/Card'; // Default import
+import { CardContent, CardHeader, CardTitle } from '@/components/ui/Card'; // Named imports
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
@@ -35,11 +36,13 @@ export default function UserManagement() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<UserWithoutPassword | null>(null);
   const [formData, setFormData] = useState({
     name: '',
     email: '',
-    role: 'USER',
+    password: '',
+    role: 'user',
     stockAnalysisAccess: false,
     walletBalance: 0,
   });
@@ -196,11 +199,63 @@ export default function UserManagement() {
     );
   }
 
+  // Handle opening the add user dialog
+  const handleAddUserClick = () => {
+    setFormData({
+      name: '',
+      email: '',
+      password: '',
+      role: 'user',
+      stockAnalysisAccess: false,
+      walletBalance: 0,
+    });
+    setIsAddDialogOpen(true);
+  };
+
+  // Handle adding a new user
+  const handleAddUser = async () => {
+    try {
+      const response = await fetch('/api/admin/users', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          name: formData.name,
+          email: formData.email,
+          password: formData.password,
+          role: formData.role,
+          stockAnalysisAccess: formData.stockAnalysisAccess,
+          walletBalance: formData.walletBalance,
+        }),
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to add user');
+      }
+      
+      const { user } = await response.json();
+      setUsers([...users, user]);
+      setIsAddDialogOpen(false);
+      toast({
+        title: 'Success',
+        description: 'User added successfully',
+      });
+    } catch (err) {
+      toast({
+        title: 'Error',
+        description: err instanceof Error ? err.message : 'Failed to add user',
+        variant: 'destructive',
+      });
+    }
+  };
+
   return (
     <Card className="w-full">
       <CardHeader className="flex flex-row items-center justify-between">
         <CardTitle>User Management</CardTitle>
-        <Button className="flex items-center gap-1">
+        <Button className="flex items-center gap-1" onClick={handleAddUserClick}>
           <FiUserPlus className="mr-1" /> Add User
         </Button>
       </CardHeader>
@@ -266,7 +321,7 @@ export default function UserManagement() {
 
       {/* Edit User Dialog */}
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-        <DialogContent>
+        <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>
             <DialogTitle>Edit User</DialogTitle>
           </DialogHeader>
@@ -277,9 +332,8 @@ export default function UserManagement() {
               </Label>
               <Input
                 id="name"
-                name="name"
                 value={formData.name}
-                onChange={handleInputChange}
+                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                 className="col-span-3"
               />
             </div>
@@ -289,9 +343,8 @@ export default function UserManagement() {
               </Label>
               <Input
                 id="email"
-                name="email"
                 value={formData.email}
-                onChange={handleInputChange}
+                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                 className="col-span-3"
               />
             </div>
@@ -301,7 +354,7 @@ export default function UserManagement() {
               </Label>
               <Select
                 value={formData.role}
-                onValueChange={(value) => handleSelectChange('role', value)}
+                onValueChange={(value) => setFormData({ ...formData, role: value })}
               >
                 <SelectTrigger className="col-span-3">
                   <SelectValue placeholder="Select role" />
@@ -313,41 +366,133 @@ export default function UserManagement() {
               </Select>
             </div>
             <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="stockAnalysisAccess" className="text-right">
-                Analysis Access
-              </Label>
-              <div className="col-span-3 flex items-center">
-                <Switch
-                  id="stockAnalysisAccess"
-                  checked={formData.stockAnalysisAccess}
-                  onCheckedChange={(checked) => handleSwitchChange('stockAnalysisAccess', checked)}
-                />
-                <span className="ml-2">
-                  {formData.stockAnalysisAccess ? 'Enabled' : 'Disabled'}
-                </span>
-              </div>
-            </div>
-            <div className="grid grid-cols-4 items-center gap-4">
               <Label htmlFor="walletBalance" className="text-right">
                 Wallet Balance
               </Label>
               <Input
                 id="walletBalance"
-                name="walletBalance"
                 type="number"
-                value={formData.walletBalance}
-                onChange={handleInputChange}
+                value={formData.walletBalance.toString()}
+                onChange={(e) => setFormData({ ...formData, walletBalance: parseFloat(e.target.value) || 0 })}
                 className="col-span-3"
               />
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="stockAnalysisAccess" className="text-right">
+                Analysis Access
+              </Label>
+              <div className="flex items-center space-x-2 col-span-3">
+                <Switch
+                  id="stockAnalysisAccess"
+                  checked={formData.stockAnalysisAccess}
+                  onCheckedChange={(checked) => setFormData({ ...formData, stockAnalysisAccess: checked })}
+                />
+                <Label htmlFor="stockAnalysisAccess">
+                  {formData.stockAnalysisAccess ? 'Enabled' : 'Disabled'}
+                </Label>
+              </div>
             </div>
           </div>
           <div className="flex justify-end gap-2">
             <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>
               Cancel
             </Button>
-            <Button onClick={handleUpdateUser}>
-              Save Changes
+            <Button onClick={handleUpdateUser}>Save Changes</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+      
+      {/* Add User Dialog */}
+      <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Add New User</DialogTitle>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="new-name" className="text-right">
+                Name
+              </Label>
+              <Input
+                id="new-name"
+                value={formData.name}
+                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                className="col-span-3"
+              />
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="new-email" className="text-right">
+                Email
+              </Label>
+              <Input
+                id="new-email"
+                value={formData.email}
+                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                className="col-span-3"
+              />
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="new-password" className="text-right">
+                Password
+              </Label>
+              <Input
+                id="new-password"
+                type="password"
+                value={formData.password}
+                onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                className="col-span-3"
+              />
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="new-role" className="text-right">
+                Role
+              </Label>
+              <Select
+                value={formData.role}
+                onValueChange={(value) => setFormData({ ...formData, role: value })}
+              >
+                <SelectTrigger className="col-span-3" id="new-role">
+                  <SelectValue placeholder="Select role" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="USER">User</SelectItem>
+                  <SelectItem value="ADMIN">Admin</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="new-walletBalance" className="text-right">
+                Wallet Balance
+              </Label>
+              <Input
+                id="new-walletBalance"
+                type="number"
+                value={formData.walletBalance.toString()}
+                onChange={(e) => setFormData({ ...formData, walletBalance: parseFloat(e.target.value) || 0 })}
+                className="col-span-3"
+              />
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="new-stockAnalysisAccess" className="text-right">
+                Analysis Access
+              </Label>
+              <div className="flex items-center space-x-2 col-span-3">
+                <Switch
+                  id="new-stockAnalysisAccess"
+                  checked={formData.stockAnalysisAccess}
+                  onCheckedChange={(checked) => setFormData({ ...formData, stockAnalysisAccess: checked })}
+                />
+                <Label htmlFor="new-stockAnalysisAccess">
+                  {formData.stockAnalysisAccess ? 'Enabled' : 'Disabled'}
+                </Label>
+              </div>
+            </div>
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => setIsAddDialogOpen(false)}>
+              Cancel
             </Button>
+            <Button onClick={handleAddUser}>Add User</Button>
           </div>
         </DialogContent>
       </Dialog>

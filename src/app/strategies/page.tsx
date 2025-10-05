@@ -12,6 +12,14 @@ import Card, {
 } from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
 import Tabs, { TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog';
 import UserLayout from '@/components/UserLayout';
 
 import {
@@ -33,18 +41,39 @@ const StrategiesPageContent: React.FC = () => {
 
   // Fetch strategies from the database
   useEffect(() => {
-    try {
-      const allStrategies = getAllStrategies();
-      setStrategies(allStrategies);
-    } catch (error) {
-      console.error('Error fetching strategies:', error);
-    } finally {
-      setLoading(false);
-    }
+    const fetchStrategies = () => {
+      try {
+        // Force a fresh read from localStorage to get the latest strategies
+        if (typeof window !== 'undefined') {
+          // Clear any cached data
+          localStorage.removeItem('strategies_cache');
+        }
+        
+        // Get all strategies from the database with a fresh read
+        const allStrategies = getAllStrategies();
+        setStrategies(allStrategies);
+      } catch (error) {
+        console.error('Error fetching strategies:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    fetchStrategies();
+    
+    // Set up a refresh interval to check for new strategies
+    const refreshInterval = setInterval(fetchStrategies, 5000);
+    
+    // Clean up the interval on component unmount
+    return () => clearInterval(refreshInterval);
   }, []);
 
   const handleViewInfo = (strategy: Strategy) => {
     setSelectedStrategy(strategy);
+  };
+  
+  const closeStrategyInfo = () => {
+    setSelectedStrategy(null);
   };
 
   const handleDeploy = (strategy: Strategy) => {
@@ -66,6 +95,73 @@ const StrategiesPageContent: React.FC = () => {
           </span>
         </div>
       </div>
+      
+      {/* Strategy Info Modal */}
+      <Dialog open={!!selectedStrategy} onOpenChange={(open) => !open && setSelectedStrategy(null)}>
+        <DialogContent className="max-w-3xl">
+          {selectedStrategy && (
+            <>
+              <DialogHeader>
+                <DialogTitle className="text-2xl">{selectedStrategy.name}</DialogTitle>
+                <DialogDescription className="text-base">{selectedStrategy.description}</DialogDescription>
+              </DialogHeader>
+              <div className="grid gap-6 py-4">
+                <div className="relative h-48 bg-gradient-to-br from-primary/20 to-primary/5">
+                  <Image
+                    src={selectedStrategy.imageUrl}
+                    alt={selectedStrategy.name}
+                    width={200}
+                    height={200}
+                    className="absolute inset-0 w-full h-full object-contain p-6"
+                  />
+                </div>
+                <div className="space-y-4">
+                  <h3 className="text-lg font-semibold">Strategy Details</h3>
+                  <p>{selectedStrategy.details}</p>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <h3 className="text-lg font-semibold mb-2">Parameters</h3>
+                    <ul className="space-y-2">
+                      {Object.entries(selectedStrategy.parameters).map(([key, value]) => (
+                        <li key={key} className="flex justify-between">
+                          <span className="text-muted-foreground">{key}:</span>
+                          <span className="font-medium">{value}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-semibold mb-2">Performance</h3>
+                    <div className="space-y-2">
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Performance:</span>
+                        <span className={`font-medium ${selectedStrategy.performance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                          {selectedStrategy.performance >= 0 ? '+' : ''}{selectedStrategy.performance}%
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Risk Level:</span>
+                        <span className="font-medium">{selectedStrategy.riskLevel}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Category:</span>
+                        <span className="font-medium">{selectedStrategy.category}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <DialogFooter>
+                <Button onClick={() => handleDeploy(selectedStrategy)}>
+                  <FiPlay className="mr-2" />
+                  Deploy Strategy
+                </Button>
+              </DialogFooter>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
           
           <div className="space-y-6">
             {/* Strategy categories tabs */}
@@ -146,17 +242,20 @@ const StrategiesPageContent: React.FC = () => {
                   </CardContent>
                   <CardFooter className="flex space-x-2">
                     <Button 
-                      variant="outline" 
-                      className="flex-1" 
+                      variant="outline"
+                      className="flex-1 flex items-center justify-center"
                       onClick={() => handleViewInfo(strategy)}
                     >
-                      <FiInfo className="mr-2 h-4 w-4" /> Info
+                      <FiInfo className="mr-2" />
+                      Info
                     </Button>
                     <Button 
-                      className="flex-1 bg-primary hover:bg-primary/90"
+                      variant="default"
+                      className="flex-1 flex items-center justify-center"
                       onClick={() => handleDeploy(strategy)}
                     >
-                      <FiPlay className="mr-2 h-4 w-4" /> Deploy
+                      <FiPlay className="mr-2" />
+                      Deploy
                     </Button>
                   </CardFooter>
                 </Card>

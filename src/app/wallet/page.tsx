@@ -89,14 +89,45 @@ const WalletPageContent: React.FC = () => {
               currentUser.wallet_transactions = [];
             }
             
+            // Create a new transaction with admin verification fields
             currentUser.wallet_transactions.unshift({
               id: `txn_${Date.now()}`,
+              user_id: user.id,
               amount: amountValue,
-              method: paymentMethod,
+              transaction_type: 'deposit',
+              payment_method: paymentMethod,
               transaction_id: transactionId,
               receipt_path: preview, // In a real app, this would be a path to the stored image
-              status: 'pending', // In a real app, this would be verified by admin
-              created_at: new Date().toISOString()
+              status: 'pending', // Will be verified by admin
+              created_at: new Date().toISOString(),
+              admin_verified: false,
+              admin_notes: '',
+              user: {
+                name: user.name,
+                email: user.email
+              }
+            });
+            
+            // Add to admin payment verification queue
+            if (!parsedData.admin_payment_queue) {
+              parsedData.admin_payment_queue = [];
+            }
+            
+            // Add to admin queue for verification
+            parsedData.admin_payment_queue.push({
+              id: `txn_${Date.now()}`,
+              user_id: user.id,
+              amount: amountValue,
+              transaction_type: 'deposit',
+              payment_method: paymentMethod,
+              transaction_id: transactionId,
+              receipt_path: preview,
+              status: 'pending',
+              created_at: new Date().toISOString(),
+              user: {
+                name: user.name,
+                email: user.email
+              }
             });
             
             // Save updated data

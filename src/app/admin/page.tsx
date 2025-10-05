@@ -7,6 +7,7 @@ import { FiUsers, FiDollarSign, FiLink, FiDatabase, FiActivity, FiTrendingUp } f
 import UserManagement from '@/components/admin/UserManagement';
 import StrategyManagement from '@/components/admin/StrategyManagement';
 import PaymentVerification from '@/components/admin/PaymentVerification';
+import AnalyticsDashboard from '@/components/admin/AnalyticsDashboard';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import Card, { CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/Card';
 
@@ -64,6 +65,59 @@ export default function AdminPage() {
         <h1 className="text-3xl font-bold">Admin Dashboard ({session.user.name})</h1>
       </div>
 
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        <Card className="hover:shadow-lg transition-shadow duration-300">
+          <CardHeader>
+            <CardTitle className="flex items-center">
+              <FiUsers className="mr-2" /> User Management
+            </CardTitle>
+            <CardDescription>
+              View and manage user accounts, permissions, and access levels.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <p className="mb-4">Manage all user accounts, reset passwords, and control access permissions.</p>
+            <a href="/admin/users" className="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90">
+              Go to User Management
+            </a>
+          </CardContent>
+        </Card>
+        
+        <Card className="hover:shadow-lg transition-shadow duration-300">
+          <CardHeader>
+            <CardTitle className="flex items-center">
+              <FiTrendingUp className="mr-2" /> Strategy Management
+            </CardTitle>
+            <CardDescription>
+              Create, edit, and manage trading strategies available to users.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <p className="mb-4">Add new trading strategies, update existing ones, and control user access.</p>
+            <a href="/admin/strategy" className="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90">
+              Go to Strategy Management
+            </a>
+          </CardContent>
+        </Card>
+        
+        <Card className="hover:shadow-lg transition-shadow duration-300">
+          <CardHeader>
+            <CardTitle className="flex items-center">
+              <FiDollarSign className="mr-2" /> Payment Verification
+            </CardTitle>
+            <CardDescription>
+              Verify and process user payment transactions.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <p className="mb-4">Review pending payments, approve transactions, and manage user wallet balances.</p>
+            <a href="/admin/payments" className="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90">
+              Go to Payment Verification
+            </a>
+          </CardContent>
+        </Card>
+      </div>
+
       <Tabs defaultValue="users" className="w-full">
         <TabsList className="grid w-full grid-cols-6">
           <TabsTrigger value="users" className="flex items-center gap-2">
@@ -91,15 +145,7 @@ export default function AdminPage() {
         </TabsContent>
 
         <TabsContent value="analytics" className="mt-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Analytics</CardTitle>
-              <CardDescription>View system analytics and statistics</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <p>Analytics dashboard will be implemented here.</p>
-            </CardContent>
-          </Card>
+          <AnalyticsDashboard />
         </TabsContent>
 
         <TabsContent value="payments" className="mt-6">

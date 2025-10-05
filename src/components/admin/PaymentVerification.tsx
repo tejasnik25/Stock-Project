@@ -2,12 +2,15 @@
 
 import { useState, useEffect } from 'react';
 import Button from '@/components/ui/Button';
-import Card, { CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
+import Card from '@/components/ui/Card';
+import { CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Badge } from '@/components/ui/badge';
+import { Badge } from '@/components/ui/Badge';
+import { Label } from '@/components/ui/label';
+import Input from '@/components/ui/Input';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { useToast } from '@/components/ui/use-toast';
@@ -21,7 +24,7 @@ interface Transaction {
   payment_method?: string;
   transaction_id?: string;
   receipt_path?: string;
-  status: 'pending' | 'approved' | 'rejected';
+  status: 'pending' | 'completed' | 'failed';
   created_at: string;
   updated_at?: string;
   admin_id?: string;
@@ -45,8 +48,10 @@ export default function PaymentVerification({ onSendEmail }: PaymentVerification
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
   const [receiptDialogOpen, setReceiptDialogOpen] = useState(false);
   const [actionDialogOpen, setActionDialogOpen] = useState(false);
+  const [tokenAmount, setTokenAmount] = useState<string>(''); // Keep as string for input
   const [actionType, setActionType] = useState<'approve' | 'reject' | null>(null);
   const [processingAction, setProcessingAction] = useState(false);
+  const [showTokenDialog, setShowTokenDialog] = useState(false);
 
   useEffect(() => {
     fetchPendingTransactions();
@@ -55,19 +60,27 @@ export default function PaymentVerification({ onSendEmail }: PaymentVerification
   const fetchPendingTransactions = async () => {
     setLoading(true);
     setError(null);
-
+    
     try {
-      const response = await fetch('/api/admin/transactions', {
-        method: 'GET',
-        credentials: 'include',
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to fetch pending transactions');
+      // Load payment requests from localStorage
+      if (typeof window !== 'undefined') {
+        const storedData = localStorage.getItem('stock_analysis_db');
+        if (storedData) {
+          const parsedData = JSON.parse(storedData);
+          
+          // Get payment requests from admin queue
+          const paymentRequests = parsedData.admin_payment_queue || [];
+          
+          // Sort by date (newest first)
+          paymentRequests.sort((a: Transaction, b: Transaction) => {
+            return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+          });
+          
+          setTransactions(paymentRequests);
+        } else {
+          setTransactions([]);
+        }
       }
-
-      const data = await response.json();
-      setTransactions(data.transactions);
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'An error occurred';
       setError(errorMessage);
@@ -85,17 +98,48 @@ export default function PaymentVerification({ onSendEmail }: PaymentVerification
     setError(null);
 
     try {
-      const response = await fetch(`/api/admin/transactions/${selectedTransaction.id}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ status: actionType }),
-        credentials: 'include',
-      });
-
-      if (!response.ok) {
-        throw new Error(`Failed to ${actionType} transaction`);
+      // Get token amount to add if approving
+      const tokens = actionType === 'approve' ? (parseInt(tokenAmount) || 0) : 0;
+      
+      // In a real app, this would be an API call
+      // For now, we'll use localStorage
+      if (typeof window !== 'undefined') {
+        const storedData = localStorage.getItem('stock_analysis_db');
+        if (storedData) {
+          const parsedData = JSON.parse(storedData);
+          
+          // Find user and update their tokens if approving
+          if (actionType === 'approve') {
+            const user = parsedData.users.find((u: any) => u.id === selectedTransaction.user_id);
+            if (user) {
+              // Add tokens to user account
+              user.tokens = (user.tokens || 0) + tokens;
+              
+              // Update transaction status in user's wallet_transactions
+              if (user.wallet_transactions) {
+                const txIndex = user.wallet_transactions.findIndex((tx: any) => tx.id === selectedTransaction.id);
+                if (txIndex !== -1) {
+                  user.wallet_transactions[txIndex].status = 'completed';
+                  user.wallet_transactions[txIndex].admin_verified = true;
+                  user.wallet_transactions[txIndex].tokens_added = tokens;
+                  user.wallet_transactions[txIndex].updated_at = new Date().toISOString();
+                  user.wallet_transactions[txIndex].admin_id = session?.user?.id;
+                }
+              }
+            }
+          }
+          
+          // Remove from admin queue
+          parsedData.admin_payment_queue = parsedData.admin_payment_queue.filter(
+            (t: any) => t.id !== selectedTransaction.id
+          );
+          
+          // Save updated data
+          localStorage.setItem('stock_analysis_db', JSON.stringify(parsedData));
+          
+          // Update local state
+          setTransactions(prev => prev.filter(t => t.id !== selectedTransaction.id));
+        }
       }
 
       // Close dialog and refresh list
@@ -103,9 +147,10 @@ export default function PaymentVerification({ onSendEmail }: PaymentVerification
       toast({ 
         variant: 'default', 
         title: 'Success', 
-        description: `Transaction ${actionType}d successfully` 
+        description: actionType === 'approve' 
+          ? `Transaction approved and ${tokens} tokens added to user account` 
+          : 'Transaction rejected successfully'
       });
-      fetchPendingTransactions();
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'An error occurred';
       setError(errorMessage);
@@ -150,6 +195,16 @@ export default function PaymentVerification({ onSendEmail }: PaymentVerification
   const handleActionDialogOpen = (transaction: Transaction, action: 'approve' | 'reject') => {
     setSelectedTransaction(transaction);
     setActionType(action);
+    if (action === 'approve') {
+      setTokenAmount(''); // Reset token amount
+      setShowTokenDialog(true); // Show token dialog first
+    } else {
+      setActionDialogOpen(true);
+    }
+  };
+  
+  const handleTokenConfirm = () => {
+    setShowTokenDialog(false);
     setActionDialogOpen(true);
   };
 
@@ -195,11 +250,10 @@ export default function PaymentVerification({ onSendEmail }: PaymentVerification
             <Button 
               variant="default" 
               size="sm"
-              leftIcon={<RefreshCw className="h-4 w-4" />
-              }
               onClick={fetchPendingTransactions}
               disabled={loading}
             >
+              <RefreshCw className="h-4 w-4 mr-2" />
               Refresh
             </Button>
           </div>
@@ -349,39 +403,100 @@ export default function PaymentVerification({ onSendEmail }: PaymentVerification
         </DialogFooter>
       </Dialog>
 
+      {/* Token Allocation Dialog */}
+      <Dialog open={showTokenDialog} onOpenChange={setShowTokenDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Allocate Tokens</DialogTitle>
+            <DialogDescription>
+              Specify the number of tokens to add to the user's account
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="tokenAmount" className="text-right">
+                Tokens
+              </Label>
+              <Input
+                id="tokenAmount"
+                type="number"
+                value={tokenAmount}
+                onChange={(e) => setTokenAmount(e.target.value)}
+                className="col-span-3"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowTokenDialog(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleTokenConfirm}>
+              Continue
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Action Dialog */}
       <Dialog open={actionDialogOpen} onOpenChange={setActionDialogOpen}>
-        <DialogHeader>
-          <DialogTitle>
-            {actionType === 'approve' ? 'Approve Payment' : 'Reject Payment'}
-          </DialogTitle>
-          <DialogDescription>
-            An email notification will be sent to the user.
-          </DialogDescription>
-        </DialogHeader>
-        <DialogContent>
-          <p className="py-4">
-            {actionType === 'approve' 
-              ? `Are you sure you want to approve the payment of $${selectedTransaction?.amount.toFixed(2)} for ${selectedTransaction?.user?.name}?`
-              : `Are you sure you want to reject the payment of $${selectedTransaction?.amount.toFixed(2)} for ${selectedTransaction?.user?.name}?`
-            }
-          </p>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              {actionType === 'approve' ? 'Approve Payment' : 'Reject Payment'}
+            </DialogTitle>
+            <DialogDescription>
+              {actionType === 'approve'
+                ? `Approve this payment and add ${tokenAmount} tokens to the user's account`
+                : 'Are you sure you want to reject this payment?'}
+            </DialogDescription>
+          </DialogHeader>
+          
+          {selectedTransaction && (
+            <div className="grid gap-4 py-4">
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label className="text-right">Amount</Label>
+                <div className="col-span-3">
+                  <span className="font-medium">${selectedTransaction.amount.toFixed(2)}</span>
+                </div>
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label className="text-right">User</Label>
+                <div className="col-span-3">
+                  <span className="font-medium">{selectedTransaction.user?.name}</span>
+                  <span className="block text-sm text-gray-500">{selectedTransaction.user?.email}</span>
+                </div>
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label className="text-right">Date</Label>
+                <div className="col-span-3">
+                  <span className="font-medium">
+                    {formatDate(selectedTransaction.created_at)}
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
+          
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setActionDialogOpen(false)} disabled={processingAction}>
+              Cancel
+            </Button>
+            <Button 
+              onClick={handleTransactionAction} 
+              variant={actionType === 'approve' ? 'default' : 'destructive'}
+              disabled={processingAction}
+            >
+              {processingAction ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Processing...
+                </>
+              ) : (
+                actionType === 'approve' ? 'Approve' : 'Reject'
+              )}
+            </Button>
+          </DialogFooter>
         </DialogContent>
-        <DialogFooter>
-          <Button onClick={() => setActionDialogOpen(false)} disabled={processingAction}>
-            Cancel
-          </Button>
-          <Button 
-            onClick={handleTransactionAction}
-            className={actionType === 'approve' ? 'bg-green-600 hover:bg-green-700' : 'bg-red-600 hover:bg-red-700'}
-            disabled={processingAction}
-          >
-            {processingAction ? (
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            ) : null}
-            {actionType === 'approve' ? 'Approve' : 'Reject'}
-          </Button>
-        </DialogFooter>
       </Dialog>
     </div>
   );

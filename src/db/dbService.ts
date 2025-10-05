@@ -1,6 +1,7 @@
 // Define types
 import bcrypt from 'bcryptjs';
 import { hashPassword } from '@/lib/auth';
+import pool from './db'; // Import centralized database connection
 
 export type User = {
   id: string;
@@ -65,6 +66,211 @@ type Database = {
   wallet_transactions: WalletTransaction[];
   strategies: Strategy[];
 };
+
+// Initialize database
+const database: Database = {
+  users: [],
+  analysis_pricing: [],
+  wallet_transactions: [],
+  strategies: []
+};
+
+// Add day trading strategy
+export function addDayTradingStrategy() {
+  const dayTradingStrategy: Strategy = {
+    id: "day-trading-intraday",
+    name: "Intraday Day Trading Strategy",
+    description: "A comprehensive day trading strategy for intraday trades with 2-8 hour hold times.",
+    performance: 78,
+    riskLevel: "Medium",
+    category: "Momentum",
+    imageUrl: "/stock-chart.svg",
+    details: `# Day Trading Strategy (Intraday, 2-8 Hours Hold)
+
+## Framework:
+
+### 1. Higher Timeframe Bias (4H → 1H)
+- Identify main trend: HH/HL = Bullish, LH/LL = Bearish
+- Use 50 EMA & 200 EMA for extra confirmation
+- Trade only in the direction of 1H/4H trend
+
+### 2. Liquidity Zones
+- Mark previous day's High/Low, Asian range, London High/Low
+- Identify buy-side liquidity (above highs) and sell-side liquidity (below lows)
+- Watch for:
+  - Liquidity sweep (stop hunt) → reversal setup
+  - Clean breakout & retest → continuation setup
+
+### 3. Entry Trigger (15m → 5m)
+- Look for:
+  - Break of Structure (BoS) at key zone
+  - Liquidity sweep + rejection candle (engulfing / pin bar)
+  - Retest of 20/50 EMA with trend continuation
+  - Fair Value Gap (FVG) fill entry
+
+### 4. Risk Management
+- Stop Loss (SL): Below sweep wick / recent swing low (for buys) OR above swing high (for sells)
+- Risk: 1–2% per trade
+- Ensure minimum R:R = 1:2
+
+### 5. Trade Management
+- TP1: Nearest liquidity level (session high/low)
+- TP2: Next key structure (previous day high/low)
+- TP3 (optional): Opposite liquidity pool
+- Move SL → breakeven after TP1 hit
+- Max holding time: same trading day (2–8 hrs)`,
+    parameters: {
+      "Timeframe Analysis": "4H, 1H, 15m, 5m",
+      "Risk Per Trade": "1-2%",
+      "Minimum R:R": "1:2",
+      "Max Hold Time": "2-8 hours (same day)",
+      "Key Indicators": "50 EMA, 200 EMA, Price Action, Liquidity Zones"
+    },
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString()
+  };
+
+  // Check if strategy already exists
+  const existingIndex = database.strategies.findIndex(s => s.id === dayTradingStrategy.id);
+  if (existingIndex >= 0) {
+    // Update existing strategy
+    database.strategies[existingIndex] = dayTradingStrategy;
+  } else {
+    // Add new strategy
+    database.strategies.push(dayTradingStrategy);
+  }
+
+  return dayTradingStrategy;
+}
+
+// Mock database functions for transactions and token management
+
+// Analytics functions for admin dashboard
+export function getAnalyticsData() {
+  try {
+    // User statistics
+    const totalUsers = database.users.length;
+    const activeUsers = database.users.filter(user => user.stock_analysis_access).length;
+    const inactiveUsers = totalUsers - activeUsers;
+    const adminUsers = database.users.filter(user => user.role === 'ADMIN').length;
+    const regularUsers = database.users.filter(user => user.role === 'USER').length;
+
+    // Payment statistics
+    const allTransactions = database.transactions || [];
+    const pendingPayments = allTransactions.filter(t => t.status === 'pending').length;
+    const approvedPayments = allTransactions.filter(t => t.status === 'completed').length;
+    const rejectedPayments = allTransactions.filter(t => t.status === 'failed').length;
+    const totalPayments = allTransactions.length;
+
+    // Revenue statistics
+    const totalRevenue = allTransactions
+      .filter(t => t.status === 'completed' && t.transaction_type === 'deposit')
+      .reduce((sum, t) => sum + t.amount, 0);
+
+    // Strategy statistics
+    const totalStrategies = database.strategies.length;
+
+    return {
+      users: {
+        total: totalUsers,
+        active: activeUsers,
+        inactive: inactiveUsers,
+        admin: adminUsers,
+        regular: regularUsers
+      },
+      payments: {
+        total: totalPayments,
+        pending: pendingPayments,
+        approved: approvedPayments,
+        rejected: rejectedPayments
+      },
+      revenue: {
+        total: totalRevenue
+      },
+      strategies: {
+        total: totalStrategies
+      }
+    };
+  } catch (error) {
+    console.error('Error getting analytics data:', error);
+    return {
+      users: { total: 0, active: 0, inactive: 0, admin: 0, regular: 0 },
+      payments: { total: 0, pending: 0, approved: 0, rejected: 0 },
+      revenue: { total: 0 },
+      strategies: { total: 0 }
+    };
+  }
+}
+
+export async function updateUserTokens(userId: string, tokens: number) {
+  try {
+    const user = database.users.find(u => u.id === userId);
+    
+    if (!user) {
+      return { success: false, error: 'User not found' };
+    }
+    
+    // Add tokens to user's wallet balance
+    user.wallet_balance += tokens;
+    user.updated_at = new Date().toISOString();
+    
+    return { 
+      success: true, 
+      message: `Added ${tokens} tokens to user's account`,
+      user
+    };
+  } catch (error) {
+    console.error('Error updating user tokens:', error);
+    return { success: false, error: 'Failed to update user tokens' };
+  }
+}
+
+export async function registerUser(userData: {
+  name: string;
+  email: string;
+  password: string;
+}) {
+  try {
+    // Check if user with email already exists
+    const existingUser = database.users.find(u => u.email === userData.email);
+    
+    if (existingUser) {
+      return { success: false, error: 'Email already in use' };
+    }
+    
+    // Hash password
+    const hashedPassword = await hashPassword(userData.password);
+    
+    // Create new user
+    const newUser: User = {
+      id: `user${Date.now()}`,
+      name: userData.name,
+      email: userData.email,
+      password: hashedPassword,
+      wallet_balance: 0,
+      stock_analysis_access: false,
+      analysis_count: 0,
+      trial_expiry: false,
+      role: 'USER',
+      email_verified: false,
+      analysis_history: [],
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
+    
+    // Add user to database
+    database.users.push(newUser);
+    
+    return { 
+      success: true, 
+      message: 'User registered successfully',
+      user: { ...newUser, password: undefined } // Return user without password
+    };
+  } catch (error) {
+    console.error('Error registering user:', error);
+    return { success: false, error: 'Failed to register user' };
+  }
+}
 
 // Initial database with test users and strategies
 const initialDatabase: Database = {
@@ -761,7 +967,7 @@ export const getPendingTransactions = async (): Promise<WalletTransaction[]> => 
  */
 export const updateTransactionStatus = async (
   transactionId: string,
-  status: 'approved' | 'rejected',
+  status: 'completed' | 'failed',
   adminId: string
 ): Promise<{ success: boolean; transaction?: WalletTransaction }> => {
   try {
@@ -774,8 +980,8 @@ export const updateTransactionStatus = async (
     
     const transaction = db.wallet_transactions[transactionIndex];
     
-    // If approved, credit the user's wallet
-    if (status === 'approved' && transaction.transaction_type === 'deposit') {
+    // If completed, credit the user's wallet
+    if (status === 'completed' && transaction.transaction_type === 'deposit') {
       const user = db.users.find(u => u.id === transaction.user_id);
       if (user) {
         user.wallet_balance += transaction.amount;
