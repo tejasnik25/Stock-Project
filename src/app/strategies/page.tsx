@@ -77,8 +77,8 @@ const StrategiesPageContent: React.FC = () => {
   };
 
   const handleDeploy = (strategy: Strategy) => {
-    // Redirect to chatbox with strategy ID
-    router.push(`/dashboard?tab=chat&strategy=${strategy.id}`);
+    // Redirect to chat page with selected strategy
+    router.push(`/chat?strategy=${strategy.id}`);
   };
 
   const filteredStrategies = activeTab === 'all' 
@@ -115,31 +115,15 @@ const StrategiesPageContent: React.FC = () => {
                     className="absolute inset-0 w-full h-full object-contain p-6"
                   />
                 </div>
-                <div className="space-y-4">
-                  <h3 className="text-lg font-semibold">Strategy Details</h3>
-                  <p>{selectedStrategy.details}</p>
-                </div>
+                {/* Deliberately hiding internal framework details/parameters from users */}
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <h3 className="text-lg font-semibold mb-2">Parameters</h3>
-                    <ul className="space-y-2">
-                      {Object.entries(selectedStrategy.parameters).map(([key, value]) => (
-                        <li key={key} className="flex justify-between">
-                          <span className="text-muted-foreground">{key}:</span>
-                          <span className="font-medium">{value}</span>
-                        </li>
-                      ))}
-                    </ul>
+                    <h3 className="text-lg font-semibold mb-2">Overview</h3>
+                    <p className="text-muted-foreground">Run the strategy to get AI-generated analysis. Internals are protected.</p>
                   </div>
                   <div>
-                    <h3 className="text-lg font-semibold mb-2">Performance</h3>
+                    <h3 className="text-lg font-semibold mb-2">Meta</h3>
                     <div className="space-y-2">
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Performance:</span>
-                        <span className={`font-medium ${selectedStrategy.performance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                          {selectedStrategy.performance >= 0 ? '+' : ''}{selectedStrategy.performance}%
-                        </span>
-                      </div>
                       <div className="flex justify-between">
                         <span className="text-muted-foreground">Risk Level:</span>
                         <span className="font-medium">{selectedStrategy.riskLevel}</span>
