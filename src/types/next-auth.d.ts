@@ -6,11 +6,17 @@ declare module 'next-auth' {
     user: {
       id: string;
       role: string;
+      walletBalance?: number;
+      stockAnalysisAccess?: boolean;
+      analysisCount?: number;
     } & DefaultSession['user'];
   }
 
   interface User extends DefaultUser {
     role: string;
+    walletBalance?: number;
+    stockAnalysisAccess?: boolean;
+    analysisCount?: number;
   }
 }
 

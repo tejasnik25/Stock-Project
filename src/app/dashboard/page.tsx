@@ -231,9 +231,14 @@ function DashboardPageContent() {
                   <span className="text-3xl font-bold">$19.99</span>
                   <span className="ml-2">/month</span>
                 </div>
-                <Button variant="secondary">
-                  {session?.user?.stockAnalysisAccess ? 'Manage Subscription' : 'Subscribe Now'}
-                </Button>
+                {(() => {
+                  const hasAccess = Boolean(session?.user && (session!.user as typeof session.user & { stockAnalysisAccess?: boolean })?.stockAnalysisAccess);
+                  return (
+                    <Button variant="secondary">
+                      {hasAccess ? 'Manage Subscription' : 'Subscribe Now'}
+                    </Button>
+                  );
+                })()}
               </div>
             </CardContent>
           </Card>

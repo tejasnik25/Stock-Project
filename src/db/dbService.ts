@@ -19,7 +19,7 @@ export type User = {
   updated_at: string;
 };
 
-type AnalysisHistory = {
+export type AnalysisHistory = {
   id: string;
   analysis_type: 'Intraday Trading' | 'Positional Trading' | 'Swing Trading';
   stock_name?: string;
@@ -44,6 +44,8 @@ type WalletTransaction = {
   receipt_path?: string;
   status: 'pending' | 'completed' | 'failed';
   created_at: string;
+  updated_at?: string;
+  admin_id?: string;
 };
 
 export type Strategy = {
@@ -156,7 +158,7 @@ export function getAnalyticsData() {
     const regularUsers = database.users.filter(user => user.role === 'USER').length;
 
     // Payment statistics
-    const allTransactions = database.transactions || [];
+    const allTransactions = database.wallet_transactions || [];
     const pendingPayments = allTransactions.filter(t => t.status === 'pending').length;
     const approvedPayments = allTransactions.filter(t => t.status === 'completed').length;
     const rejectedPayments = allTransactions.filter(t => t.status === 'failed').length;

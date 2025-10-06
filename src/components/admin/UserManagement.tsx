@@ -109,12 +109,13 @@ export default function UserManagement() {
   const handleEditUser = (user: UserWithoutPassword) => {
     setSelectedUser(user);
     setFormData({
-        name: user.name || '',
-        email: user.email || '',
-        role: user.role || 'USER',
-        stockAnalysisAccess: user.stock_analysis_access || false,
-        walletBalance: user.wallet_balance || 0,
-      });
+      name: user.name || '',
+      email: user.email || '',
+      password: '',
+      role: user.role || 'USER',
+      stockAnalysisAccess: user.stock_analysis_access || false,
+      walletBalance: user.wallet_balance || 0,
+    });
     setIsEditDialogOpen(true);
   };
 

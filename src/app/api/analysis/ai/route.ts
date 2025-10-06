@@ -1,16 +1,16 @@
 import { NextResponse } from 'next/server';
 import { runAiAnalysis, type StrategyKey } from '@/lib/ai';
-import { readDatabase, writeDatabase } from '@/db/dbService';
+import { readDatabase, writeDatabase, type AnalysisHistory } from '@/db/dbService';
 
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { strategy, inputs, save, userId } = body as {
+    const { strategy, inputs, save, userId }: {
       strategy: StrategyKey;
       inputs: { fifteenMin?: string; oneHour?: string; fiveMin?: string };
       save?: boolean;
       userId?: string;
-    };
+    } = body;
 
     if (!strategy) {
       return NextResponse.json({ error: 'strategy is required' }, { status: 400 });
@@ -25,7 +25,7 @@ export async function POST(request: Request) {
       if (!user) {
         return NextResponse.json({ error: 'User not found' }, { status: 404 });
       }
-      const newAnalysis = {
+      const newAnalysis: AnalysisHistory = {
         id: `analysis_${Date.now()}`,
         analysis_type: strategy === 'day' ? 'Intraday Trading' : strategy === 'swing' ? 'Swing Trading' : 'Intraday Trading',
         stock_name: undefined,
@@ -33,7 +33,7 @@ export async function POST(request: Request) {
         image_path: inputs?.fifteenMin || inputs?.oneHour || inputs?.fiveMin,
         created_at: new Date().toISOString(),
       };
-      user.analysis_history.unshift(newAnalysis as any);
+      user.analysis_history.unshift(newAnalysis);
       writeDatabase(db);
       savedId = newAnalysis.id;
     }

@@ -27,7 +27,7 @@ export async function PUT(request: Request) {
     
     if (!updateResult.success) {
       return NextResponse.json(
-        { success: false, message: updateResult.error },
+        { success: false, message: 'Failed to update transaction status' },
         { status: 400 }
       );
     }
@@ -35,6 +35,12 @@ export async function PUT(request: Request) {
     // If transaction is approved and tokens are provided, update user tokens
     if (status === 'APPROVED' && typeof tokens === 'number' && tokens > 0) {
       const transaction = updateResult.transaction;
+      if (!transaction) {
+        return NextResponse.json(
+          { success: false, message: 'Transaction not found after update' },
+          { status: 400 }
+        );
+      }
       // Credit the user's wallet with the provided tokens amount
       const updateTokensResult = await updateUserTokens(transaction.user_id, tokens);
       if (!updateTokensResult.success) {

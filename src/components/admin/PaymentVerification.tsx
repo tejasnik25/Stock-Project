@@ -8,7 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Badge } from '@/components/ui/Badge';
+import Badge from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
 import Input from '@/components/ui/Input';
 import { useSession } from 'next-auth/react';
@@ -28,6 +28,8 @@ interface Transaction {
   created_at: string;
   updated_at?: string;
   admin_id?: string;
+  admin_verified?: boolean;
+  tokens_added?: number;
   user?: {
     name: string;
     email: string;
@@ -301,7 +303,7 @@ export default function PaymentVerification({ onSendEmail }: PaymentVerification
                             <Tooltip>
                               <TooltipTrigger asChild>
                                 <Button
-                                  variant="ghost"
+                                  variant="outline"
                                   size="icon"
                                   className="h-8 w-8"
                                   onClick={() => handleViewReceipt(transaction)}
@@ -320,7 +322,7 @@ export default function PaymentVerification({ onSendEmail }: PaymentVerification
                             <Tooltip>
                               <TooltipTrigger asChild>
                                 <Button
-                                  variant="ghost"
+                                  variant="outline"
                                   size="icon"
                                   className="h-8 w-8 text-green-600 hover:text-green-700 hover:bg-green-50"
                                   onClick={() => handleActionDialogOpen(transaction, 'approve')}
@@ -338,7 +340,7 @@ export default function PaymentVerification({ onSendEmail }: PaymentVerification
                             <Tooltip>
                               <TooltipTrigger asChild>
                                 <Button
-                                  variant="ghost"
+                                  variant="outline"
                                   size="icon"
                                   className="h-8 w-8 text-red-600 hover:text-red-700 hover:bg-red-50"
                                   onClick={() => handleActionDialogOpen(transaction, 'reject')}
@@ -487,7 +489,7 @@ export default function PaymentVerification({ onSendEmail }: PaymentVerification
             </Button>
             <Button 
               onClick={handleTransactionAction} 
-              variant={actionType === 'approve' ? 'default' : 'destructive'}
+              variant={actionType === 'approve' ? 'default' : 'outline'}
               disabled={processingAction}
             >
               {processingAction ? (

@@ -68,15 +68,15 @@ export async function PUT(req: NextRequest) {
     const { status } = body;
 
     // Validate status
-    if (!status || !['approved', 'rejected'].includes(status)) {
+    if (!status || !['completed', 'failed'].includes(status)) {
       return NextResponse.json(
-        { error: 'Invalid status. Must be "approved" or "rejected".' },
+        { error: 'Invalid status. Must be "completed" or "failed".' },
         { status: 400 }
       );
     }
 
     // Update transaction status
-    const result = await updateTransactionStatus(transactionId, status as 'approved' | 'rejected', session.user.id);
+    const result = await updateTransactionStatus(transactionId, status as 'completed' | 'failed', session.user.id);
     
     if (!result.success || !result.transaction) {
       return NextResponse.json(
@@ -91,7 +91,7 @@ export async function PUT(req: NextRequest) {
     if (userResult.success && userResult.user) {
       const user = userResult.user;
       // Send email notification to user
-      if (status === 'approved') {
+      if (status === 'completed') {
         await sendEmailNotification(
           user.email,
           'Payment Approved',

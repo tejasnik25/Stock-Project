@@ -33,7 +33,7 @@ export const authOptions: NextAuthOptions = {
               name: adminUser.name,
               email: adminUser.email,
               role: adminUser.role,
-            } as any;
+            } as unknown as { id: string; name: string; email: string; role: string };
           }
         }
 
@@ -46,25 +46,25 @@ export const authOptions: NextAuthOptions = {
           id: result.user.id,
           email: result.user.email,
           name: result.user.name,
-          role: (result.user as any).role || 'USER',
-        } as any;
+          role: (result.user as unknown as { role?: string }).role || 'USER',
+        } as { id: string; email: string; name: string; role: string };
       },
     }),
   ],
   callbacks: {
     async jwt({ token, user }) {
       if (user) {
-        (token as any).id = (user as any).id;
-        (token as any).role = (user as any).role;
+        (token as unknown as { id: string }).id = (user as unknown as { id: string }).id;
+        (token as unknown as { role: string }).role = (user as unknown as { role: string }).role;
         token.name = user.name;
       }
       return token;
     },
     async session({ session, token }) {
-      if ((token as any) && session.user) {
-        (session.user as any).id = (token as any).id as string;
-        (session.user as any).role = (token as any).role as string;
-        session.user.name = token.name as string;
+      if ((token as unknown as { id?: string; role?: string }) && session.user) {
+        (session.user as unknown as { id?: string }).id = (token as unknown as { id?: string }).id as string;
+        (session.user as unknown as { role?: string }).role = (token as unknown as { role?: string }).role as string;
+        session.user.name = (token as unknown as { name?: string }).name as string;
       }
       return session;
     },

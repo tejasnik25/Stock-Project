@@ -5,16 +5,17 @@ import React, { ButtonHTMLAttributes, forwardRef } from 'react';
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: 'primary' | 'secondary' | 'outline' | 'default';
   isLoading?: boolean;
-  size?: 'sm' | 'md' | 'lg';
+  size?: 'sm' | 'md' | 'lg' | 'icon';
   leftIcon?: React.ReactNode;
 }
 
 const Button = forwardRef<HTMLButtonElement, ButtonProps>(
   ({ children, variant = 'primary', isLoading = false, size = 'md', className = '', leftIcon, ...props }, ref) => {
-    const sizeStyles = {
+    const sizeStyles: Record<NonNullable<ButtonProps['size']>, string> = {
       sm: 'px-4 py-2 text-sm',
       md: 'px-6 py-3',
-      lg: 'px-8 py-4 text-lg'
+      lg: 'px-8 py-4 text-lg',
+      icon: 'p-0 h-8 w-8 flex items-center justify-center'
     };
 
     const baseStyles = `${sizeStyles[size]} rounded-lg font-medium transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-offset-2`;
