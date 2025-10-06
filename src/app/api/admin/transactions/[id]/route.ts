@@ -1,10 +1,12 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
-import { updateTransactionStatus, getUserById, updateUserTokens } from '@/db/dbService';
+import { updateTransactionStatus, updateUserTokens } from '@/db/dbService';
 
 // Using a simpler approach for the route handler to fix build issues
-export async function PUT(request: NextRequest, context: any) {
-  const id = context.params?.id;
+export async function PUT(request: Request) {
+  const url = new URL(request.url);
+  const pathParts = url.pathname.split('/');
+  const id = pathParts[pathParts.length - 1];
   
   try {
     const session = await getServerSession();
@@ -31,24 +33,10 @@ export async function PUT(request: NextRequest, context: any) {
     }
 
     // If transaction is approved and tokens are provided, update user tokens
-    if (status === 'APPROVED' && tokens) {
+    if (status === 'APPROVED' && typeof tokens === 'number' && tokens > 0) {
       const transaction = updateResult.transaction;
-      
-      // Get user
-      const userResult = await getUserById(transaction.userId);
-      
-      if (!userResult.success) {
-        return NextResponse.json(
-          { success: false, message: 'User not found' },
-          { status: 404 }
-        );
-      }
-      
-      const user = userResult.user;
-      
-      // Update user tokens
-      const updateTokensResult = await updateUserTokens(user.id, user.tokens + tokens);
-      
+      // Credit the user's wallet with the provided tokens amount
+      const updateTokensResult = await updateUserTokens(transaction.user_id, tokens);
       if (!updateTokensResult.success) {
         return NextResponse.json(
           { success: false, message: 'Failed to update user tokens' },

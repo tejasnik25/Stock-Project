@@ -74,7 +74,8 @@ export default function AnalyticsDashboard() {
     { category: 'Revenue', count: analyticsData.revenue.total }
   ];
 
-  const CustomTooltip = ({ active, payload, label }: any) => {
+  type TooltipPayloadItem = { value: number };
+  const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?: TooltipPayloadItem[]; label?: string }) => {
     if (active && payload && payload.length) {
       return (
         <div className="bg-white dark:bg-gray-800 p-3 border rounded shadow-lg">

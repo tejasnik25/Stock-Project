@@ -66,10 +66,12 @@ export default function PaymentVerification({ onSendEmail }: PaymentVerification
       if (typeof window !== 'undefined') {
         const storedData = localStorage.getItem('stock_analysis_db');
         if (storedData) {
-          const parsedData = JSON.parse(storedData);
+          type StoredUser = { id: string; wallet_transactions?: Transaction[]; tokens?: number };
+          type StoredData = { users: StoredUser[]; admin_payment_queue: Transaction[] };
+          const parsedData: StoredData = JSON.parse(storedData) as StoredData;
           
           // Get payment requests from admin queue
-          const paymentRequests = parsedData.admin_payment_queue || [];
+          const paymentRequests: Transaction[] = parsedData.admin_payment_queue || [];
           
           // Sort by date (newest first)
           paymentRequests.sort((a: Transaction, b: Transaction) => {
@@ -106,18 +108,20 @@ export default function PaymentVerification({ onSendEmail }: PaymentVerification
       if (typeof window !== 'undefined') {
         const storedData = localStorage.getItem('stock_analysis_db');
         if (storedData) {
-          const parsedData = JSON.parse(storedData);
+          type StoredUser = { id: string; wallet_transactions?: Transaction[]; tokens?: number };
+          type StoredData = { users: StoredUser[]; admin_payment_queue: Transaction[] };
+          const parsedData: StoredData = JSON.parse(storedData) as StoredData;
           
           // Find user and update their tokens if approving
           if (actionType === 'approve') {
-            const user = parsedData.users.find((u: any) => u.id === selectedTransaction.user_id);
+            const user = parsedData.users.find((u) => u.id === selectedTransaction.user_id);
             if (user) {
               // Add tokens to user account
               user.tokens = (user.tokens || 0) + tokens;
               
               // Update transaction status in user's wallet_transactions
               if (user.wallet_transactions) {
-                const txIndex = user.wallet_transactions.findIndex((tx: any) => tx.id === selectedTransaction.id);
+                const txIndex = user.wallet_transactions.findIndex((tx) => tx.id === selectedTransaction.id);
                 if (txIndex !== -1) {
                   user.wallet_transactions[txIndex].status = 'completed';
                   user.wallet_transactions[txIndex].admin_verified = true;
@@ -131,7 +135,7 @@ export default function PaymentVerification({ onSendEmail }: PaymentVerification
           
           // Remove from admin queue
           parsedData.admin_payment_queue = parsedData.admin_payment_queue.filter(
-            (t: any) => t.id !== selectedTransaction.id
+            (t) => t.id !== selectedTransaction.id
           );
           
           // Save updated data
@@ -408,9 +412,9 @@ export default function PaymentVerification({ onSendEmail }: PaymentVerification
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Allocate Tokens</DialogTitle>
-            <DialogDescription>
-              Specify the number of tokens to add to the user's account
-            </DialogDescription>
+              <DialogDescription>
+              Specify the number of tokens to add to the user&apos;s account
+              </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
             <div className="grid grid-cols-4 items-center gap-4">
@@ -446,7 +450,7 @@ export default function PaymentVerification({ onSendEmail }: PaymentVerification
             </DialogTitle>
             <DialogDescription>
               {actionType === 'approve'
-                ? `Approve this payment and add ${tokenAmount} tokens to the user's account`
+                ? `Approve this payment and add ${tokenAmount} tokens to the user&apos;s account`
                 : 'Are you sure you want to reject this payment?'}
             </DialogDescription>
           </DialogHeader>
