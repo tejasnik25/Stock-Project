@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useSession } from 'next-auth/react';
 import { usePathname } from 'next/navigation';
 import { FiBell, FiSearch } from 'react-icons/fi';
@@ -10,6 +10,21 @@ export function UserHeader() {
   const { data: session } = useSession();
   const pathname = usePathname();
   const [searchTerm, setSearchTerm] = useState('');
+  const [walletBalance, setWalletBalance] = useState<number | null>(null);
+  useEffect(() => {
+    const fetchBalance = async () => {
+      if (!session?.user?.id) return;
+      try {
+        const res = await fetch(`/api/users?id=${encodeURIComponent(session.user.id)}`);
+        if (!res.ok) return;
+        const data = await res.json();
+        if (typeof data.user?.wallet_balance === 'number') setWalletBalance(data.user.wallet_balance);
+      } catch (err) {
+        // ignore
+      }
+    };
+    fetchBalance();
+  }, [session?.user?.id]);
 
   // Get page title from pathname
   const getPageTitle = () => {
@@ -44,6 +59,9 @@ export function UserHeader() {
       </div>
       
       <div className="flex items-center space-x-4">
+        <div className="text-sm text-gray-700 dark:text-gray-200 mr-2">
+          Wallet: <span className="font-medium text-[#00d09c]">{typeof walletBalance === 'number' ? `$${walletBalance.toFixed(2)}` : '—'}</span>
+        </div>
         <div className="relative">
           <button className="text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300">
             <span className="fx-3d-icon">

@@ -19,6 +19,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'User with this email already exists' }, { status: 409 });
     }
 
+    // No OTP verification required for registration (OTP feature removed)
+
     // Hash the password
     const hashedPassword = await bcrypt.hash(password, 10);
 
@@ -27,7 +29,7 @@ export async function POST(request: Request) {
       id: uuidv4(),
       name,
       email,
-      email_verified: false,
+      email_verified: true,
       password: hashedPassword,
       role: 'USER',
       wallet_balance: 0,
@@ -42,6 +44,7 @@ export async function POST(request: Request) {
     // Add user to the database
     db.users.push(newUser);
     writeDatabase(db);
+    // Registration completed
 
     return NextResponse.json({ message: 'User registered successfully', userId: newUser.id }, { status: 201 });
   } catch (error) {

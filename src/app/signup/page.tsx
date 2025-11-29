@@ -59,41 +59,19 @@ export default function SignupPage() {
     e.preventDefault();
     
     if (!validateForm()) return;
-
     try {
       setIsLoading(true);
-      
-      // Register user using our API
-      const response = await fetch('/api/auth/register', {
+      const registerRes = await fetch('/api/auth/register', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          action: 'register',
-          name: formData.name,
-          email: formData.email,
-          password: formData.password,
-        }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: formData.name, email: formData.email, password: formData.password }),
       });
-
-      const data = await response.json();
-
-      if (!data.success) {
-        throw new Error('Failed to register user. Email may already be taken.');
-      }
-
-      // Sign in the user after successful registration
-      const result = await signIn('credentials', {
-        email: formData.email,
-        password: formData.password,
-        redirect: false,
-      });
-
-      if (result?.error) {
-        setErrors(prev => ({ ...prev, general: 'Registration successful but failed to log in. Please go to login page.' }));
+      const rdata = await registerRes.json().catch(() => ({}));
+      if (!registerRes.ok) {
+        setErrors(prev => ({ ...prev, general: rdata.error || 'Registration failed' }));
       } else {
-        // Redirect to dashboard after successful registration and login
+        // Auto sign in after registration
+        await signIn('credentials', { email: formData.email, password: formData.password, redirect: false });
         router.push('/dashboard');
       }
     } catch (error) {
@@ -155,13 +133,15 @@ export default function SignupPage() {
               error={errors.password}
               required
             />
-            <Button
-              type="submit"
-              className="w-full mt-6 auth-button"
-              isLoading={isLoading}
-            >
-              Sign Up
-            </Button>
+            <>
+              <Button
+                type="submit"
+                className="w-full mt-6 auth-button"
+                isLoading={isLoading}
+              >
+                Sign Up
+              </Button>
+            </>
           </form>
 
           <div className="mt-6 text-center text-sm">

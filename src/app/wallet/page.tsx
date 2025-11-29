@@ -18,6 +18,7 @@ const WalletPageContent: React.FC = () => {
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string>('');
   const [success, setSuccess] = useState<boolean>(false);
+  const [createdTransaction, setCreatedTransaction] = useState<any | null>(null);
   
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
@@ -69,79 +70,34 @@ const WalletPageContent: React.FC = () => {
     setError('');
     
     try {
-      // In a real implementation, this would upload the file to a server
-      // and process the payment verification
-      
-      // For now, we'll simulate the process with localStorage
-      if (typeof window !== 'undefined' && user) {
-        const storedData = localStorage.getItem('stock_analysis_db');
-        if (storedData) {
-          const parsedData = JSON.parse(storedData);
-          const currentUser = parsedData.users.find((u: { id: string }) => u.id === user.id);
-          
-          if (currentUser) {
-            // Update wallet balance
-            const amountValue = parseFloat(amount);
-            currentUser.wallet_balance += amountValue;
-            
-            // Add transaction to history (if it exists)
-            if (!currentUser.wallet_transactions) {
-              currentUser.wallet_transactions = [];
-            }
-            
-            // Create a new transaction with admin verification fields
-            currentUser.wallet_transactions.unshift({
-              id: `txn_${Date.now()}`,
-              user_id: user.id,
-              amount: amountValue,
-              transaction_type: 'deposit',
-              payment_method: paymentMethod,
-              transaction_id: transactionId,
-              receipt_path: preview, // In a real app, this would be a path to the stored image
-              status: 'pending', // Will be verified by admin
-              created_at: new Date().toISOString(),
-              admin_verified: false,
-              admin_notes: '',
-              user: {
-                name: user.name,
-                email: user.email
-              }
-            });
-            
-            // Add to admin payment verification queue
-            if (!parsedData.admin_payment_queue) {
-              parsedData.admin_payment_queue = [];
-            }
-            
-            // Add to admin queue for verification
-            parsedData.admin_payment_queue.push({
-              id: `txn_${Date.now()}`,
-              user_id: user.id,
-              amount: amountValue,
-              transaction_type: 'deposit',
-              payment_method: paymentMethod,
-              transaction_id: transactionId,
-              receipt_path: preview,
-              status: 'pending',
-              created_at: new Date().toISOString(),
-              user: {
-                name: user.name,
-                email: user.email
-              }
-            });
-            
-            // Save updated data
-            localStorage.setItem('stock_analysis_db', JSON.stringify(parsedData));
-            
-            // Show success message
-            setSuccess(true);
-            
-            // Redirect to dashboard after a delay
-            setTimeout(() => {
-              router.push('/dashboard');
-            }, 2000);
-          }
-        }
+      if (!user) throw new Error('User is not available');
+      const amountValue = parseFloat(amount);
+      const payload = {
+        userId: user.id,
+        amount: amountValue,
+        transactionId: transactionId,
+        paymentMethod: paymentMethod,
+        receiptPath: preview || undefined,
+      };
+
+      const res = await fetch('/api/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to create transaction');
+      }
+
+      // success - the API returns updated user
+      if (data?.user) {
+        setCreatedTransaction(data.transaction || null);
+        setSuccess(true);
+        // Optional: update local preview or wallet balance UI using localStorage or re-fetch
+        setTimeout(() => router.push('/dashboard'), 2000);
+      } else {
+        throw new Error('Unexpected API response');
       }
     } catch (error) {
       console.error('Error processing payment:', error);
@@ -175,6 +131,11 @@ const WalletPageContent: React.FC = () => {
                 <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
                   Your payment is being processed. Your wallet will be updated once the payment is verified.
                 </p>
+                  {createdTransaction && (
+                    <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                      Transaction ID: <span className="font-mono">{createdTransaction.transaction_id || createdTransaction.id}</span>
+                    </p>
+                  )}
                 <div className="mt-4">
                   <Link
                     href="/dashboard"

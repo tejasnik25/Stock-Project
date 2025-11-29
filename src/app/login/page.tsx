@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { signIn } from 'next-auth/react';
@@ -9,6 +9,7 @@ import Input from '@/components/ui/Input';
 import Button from '@/components/ui/Button';
 import Card from '@/components/ui/Card';
 import ThemeColorToggle from '@/components/ui/ThemeColorToggle';
+import MathCaptcha from '@/components/ui/MathCaptcha';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -22,6 +23,8 @@ export default function LoginPage() {
     general: '',
   });
   const [isLoading, setIsLoading] = useState(false);
+  const [captchaSolved, setCaptchaSolved] = useState(false);
+  const [rememberMe, setRememberMe] = useState(false);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -29,6 +32,21 @@ export default function LoginPage() {
     // Clear error when user types
     setErrors(prev => ({ ...prev, [name]: '', general: '' }));
   };
+
+  // Load saved credentials if exist
+  useEffect(() => {
+    try {
+      const saved = typeof window !== 'undefined' ? localStorage.getItem('savedCredentials') : null;
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed?.email) setFormData(prev => ({ ...prev, email: parsed.email }));
+        if (parsed?.password) setFormData(prev => ({ ...prev, password: parsed.password }));
+        if (parsed?.rememberMe) setRememberMe(true);
+      }
+    } catch (err) {
+      // ignore
+    }
+  }, []);
 
   const validateForm = () => {
     let valid = true;
@@ -53,6 +71,11 @@ export default function LoginPage() {
     
     if (!validateForm()) return;
 
+    if (!captchaSolved) {
+      setErrors(prev => ({ ...prev, general: 'Please complete the captcha' }));
+      return;
+    }
+
     try {
       // Clear any previous errors
       setErrors(prev => ({ ...prev, general: '' }));
@@ -71,6 +94,17 @@ export default function LoginPage() {
         // Clear admin session indicator if it exists
         if (typeof window !== 'undefined') {
           localStorage.removeItem('adminSessionActive');
+        }
+        // Save credentials if rememberMe is checked
+        try {
+          if (rememberMe && typeof window !== 'undefined') {
+            const toSave = { email: formData.email, password: formData.password, rememberMe };
+            localStorage.setItem('savedCredentials', JSON.stringify(toSave));
+          } else if (typeof window !== 'undefined') {
+            localStorage.removeItem('savedCredentials');
+          }
+        } catch (err) {
+          // ignore errors
         }
         // Redirect to strategies page after successful login
         router.push('/strategies');
@@ -138,19 +172,25 @@ export default function LoginPage() {
               <div className="flex items-center">
                 <input
                   id="remember-me"
-                  name="remember-me"
+                    name="remember-me"
                   type="checkbox"
                   className="h-5 w-5 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                    checked={rememberMe}
+                    onChange={(e) => setRememberMe(e.target.checked)}
                 />
                 <label htmlFor="remember-me" className="ml-2 block text-sm text-gray-200">
                   Remember me
                 </label>
               </div>
               <div className="text-sm">
-                <a href="#" className="text-blue-400 hover:text-blue-300 transition-colors">
+                <Link href="/login/forgot-password" className="text-blue-400 hover:text-blue-300 transition-colors">
                   Forgot password?
-                </a>
+                </Link>
               </div>
+            </div>
+
+            <div className="mt-4">
+              <MathCaptcha onSolvedChange={setCaptchaSolved} />
             </div>
             
             <Button

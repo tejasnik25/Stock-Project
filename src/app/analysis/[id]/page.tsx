@@ -149,10 +149,39 @@ const AnalysisDetailPageContent: React.FC = () => {
             
             <div className="space-y-2">
               <h3 className="font-bold text-lg">Analysis Result</h3>
-              <p className="text-muted-foreground whitespace-pre-line">
-                {analysis.analysis_result || 'No analysis result available.'}
-              </p>
+              {analysis.analysis_result ? (
+                (() => {
+                  try {
+                    const parsed = typeof analysis.analysis_result === 'string' ? JSON.parse(analysis.analysis_result) : analysis.analysis_result;
+                    if (parsed && typeof parsed === 'object') {
+                      return (
+                        <div className="text-sm text-gray-200 space-y-2">
+                          {parsed.summary && <div><b>Summary:</b> {parsed.summary}</div>}
+                          {parsed.tradeSetup && <div><b>Trade Setup:</b> {parsed.tradeSetup}</div>}
+                          {parsed.entryZone && <div><b>Entry Zone:</b> {parsed.entryZone}</div>}
+                          {parsed.stopLoss && <div><b>Stop Loss:</b> {parsed.stopLoss}</div>}
+                          {parsed.takeProfit && <div><b>Take Profit:</b> {parsed.takeProfit}</div>}
+                          {parsed.riskReward && <div><b>R:R:</b> {parsed.riskReward}</div>}
+                          {parsed.reasons && <div><b>Reasons:</b> <ul className="list-disc ml-6">{parsed.reasons.map((r: string, idx: number) => <li key={idx}>{r}</li>)}</ul></div>}
+                          {parsed.chartInsights && <div><b>Chart Insights:</b> <ul className="list-disc ml-6">{parsed.chartInsights.map((c: any, idx: number) => <li key={idx}>{c.label}: {c.value}%</li>)}</ul></div>}
+                        </div>
+                      );
+                    }
+                  } catch (err) {
+                    // fallback to raw text
+                  }
+                  return <p className="text-muted-foreground whitespace-pre-line">{analysis.analysis_result}</p>;
+                })()
+              ) : (
+                <p className="text-muted-foreground">No analysis result available.</p>
+              )}
             </div>
+            {/* Price charged */}
+            {typeof (analysis as any).priceCharged === 'number' && (
+              <div className="mt-6">
+                <div><b>Tokens charged:</b> {(analysis as any).priceCharged}</div>
+              </div>
+            )}
           </div>
           
           <div>

@@ -13,11 +13,31 @@ interface CopyTradeSidebarProps {
 export const CopyTradeSidebar: React.FC<CopyTradeSidebarProps> = ({ onLogout }) => {
   const router = useRouter();
   const pathname = usePathname();
+  const [walletBalance, setWalletBalance] = React.useState<number | null>(null);
+  React.useEffect(() => {
+    const fetchBalance = async () => {
+      try {
+        const res = await fetch('/api/auth/session');
+        if (!res.ok) return;
+        const sess = await res.json();
+        const id = sess?.user?.id;
+        if (!id) return;
+        const userRes = await fetch(`/api/users?id=${encodeURIComponent(id)}`);
+        if (!userRes.ok) return;
+        const data = await userRes.json();
+        if (typeof data.user?.wallet_balance === 'number') setWalletBalance(data.user.wallet_balance);
+      } catch (err) {
+        // ignore
+      }
+    };
+    fetchBalance();
+  }, []);
 
   const navigationItems = [
     { id: 'dashboard', icon: <FiGrid className="h-5 w-5" />, label: 'Dashboard', path: '/dashboard' },
     { id: 'strategies', icon: <FiTrendingUp className="h-5 w-5" />, label: 'Strategies', path: '/strategies' },
     { id: 'billing', icon: <FiCreditCard className="h-5 w-5" />, label: 'Billing', path: '/billing' },
+    { id: 'wallet', icon: <FiDollarSign className="h-5 w-5" />, label: 'Wallet', path: '/wallet' },
     { id: 'profile', icon: <FiUser className="h-5 w-5" />, label: 'Profile', path: '/profile' },
     { id: 'analytics', icon: <FiBarChart2 className="h-5 w-5" />, label: 'Analytics', path: '/analytics' },
     { id: 'settings', icon: <FiSettings className="h-5 w-5" />, label: 'Settings', path: '/settings' },
@@ -30,6 +50,7 @@ export const CopyTradeSidebar: React.FC<CopyTradeSidebarProps> = ({ onLogout }) 
         <div className="flex h-8 w-8 items-center justify-center">
           <Image src="/financial-growth.svg" alt="Copy Trade" width={24} height={24} />
         </div>
+        <div className="text-xs text-gray-400 ml-2">{typeof walletBalance === 'number' ? `$${walletBalance.toFixed(2)}` : ''}</div>
       </div>
 
       {/* Navigation */}

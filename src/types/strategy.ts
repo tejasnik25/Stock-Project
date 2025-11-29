@@ -12,6 +12,7 @@ export type Strategy = {
   riskReward?: number;
   winStreak?: number;
   tag?: string;
+  price?: number;
   planPrices?: {
     Pro?: number;
     Expert?: number;

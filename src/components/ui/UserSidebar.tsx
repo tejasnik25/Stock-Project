@@ -2,6 +2,8 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
+import { useSession } from 'next-auth/react';
+import { useEffect, useState } from 'react';
 import { 
   FiHome, 
   FiTrendingUp, 
@@ -41,6 +43,33 @@ interface UserSidebarProps {
 
 export function UserSidebar({ onLogout }: UserSidebarProps) {
   const pathname = usePathname();
+  const { data: session } = useSession();
+  const [walletBalance, setWalletBalance] = useState<number | null>(null);
+  const [hasPending, setHasPending] = useState(false);
+
+  useEffect(() => {
+    const fetchWallet = async () => {
+      if (!session?.user?.id) return;
+      try {
+        const res = await fetch(`/api/users?id=${encodeURIComponent(session.user.id)}`);
+        if (!res.ok) return;
+        const data = await res.json();
+        if (typeof data.user?.wallet_balance === 'number') setWalletBalance(data.user.wallet_balance);
+        try {
+          const txRes = await fetch('/api/wallet/transactions', { cache: 'no-store' });
+          const txData = await txRes.json();
+          const txList: any[] = txData?.transactions || [];
+          const ownPending = txList.filter(t => t.user_id === session?.user?.id && t.status === 'pending');
+          setHasPending(ownPending.length > 0);
+        } catch (err) {
+          setHasPending(false);
+        }
+      } catch (err) {
+        // ignore
+      }
+    };
+    fetchWallet();
+  }, [session?.user?.id]);
 
   return (
     <div className="w-64 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 flex flex-col h-full">
@@ -49,6 +78,9 @@ export function UserSidebar({ onLogout }: UserSidebarProps) {
         <span className="ml-4 text-xl font-bold">
           Copy Trade
         </span>
+      </div>
+      <div className="px-4 py-3">
+        <div className="text-xs text-gray-700 dark:text-gray-300">Wallet: <span className="font-medium text-[#00d09c]">{typeof walletBalance === 'number' ? `$${walletBalance.toFixed(2)}` : '—'}</span></div>
       </div>
       <nav className="mt-4">
         <NavItem 
@@ -69,18 +101,37 @@ export function UserSidebar({ onLogout }: UserSidebarProps) {
           label="Running Strategies" 
           active={pathname === '/strategies/running'} 
         />
-        <NavItem 
-          href="/profile/billing" 
-          icon={<FiCreditCard size={18} />} 
-          label="Billing" 
-          active={pathname === '/profile/billing'} 
-        />
+        <div className="relative inline-block">
+          <NavItem 
+            href="/profile/billing" 
+            icon={<FiCreditCard size={18} />} 
+            label="Billing" 
+            active={pathname === '/profile/billing'} 
+          />
+          {hasPending && (
+            <span className="absolute right-2 top-1 h-2 w-2 rounded-full bg-yellow-400 shadow-inner" aria-hidden />
+          )}
+        </div>
         <NavItem 
           href="/dashboard?tab=profile" 
           icon={<FiUser size={18} />} 
           label="Profile" 
           active={pathname === '/dashboard' && typeof window !== 'undefined' && window.location.search.includes('tab=profile')} 
         />
+        <div className="relative inline-block">
+          <NavItem 
+            href="/wallet" 
+            icon={<FiDollarSign size={18} />} 
+            label="Wallet" 
+            active={pathname.startsWith('/wallet')} 
+          />
+          {hasPending && (
+            <span className="absolute right-2 top-1 h-2 w-2 rounded-full bg-red-500 shadow-inner" aria-hidden />
+          )}
+        </div>
+        {hasPending && (
+          <div className="absolute right-2 mt-[-40px] transform translate-y-1/2 h-2 w-2 rounded-full bg-red-500 shadow-lg" aria-hidden />
+        )}
       </nav>
       
       <div className="p-4 border-t border-gray-200 dark:border-gray-700">

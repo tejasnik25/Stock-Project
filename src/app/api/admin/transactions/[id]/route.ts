@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { checkAdminAuth } from '../../auth';
-import { updateTransactionStatus, updateUserTokens } from '@/db/dbService';
+import { updateTransactionStatus } from '@/db/dbService';
 
 // Using a simpler approach for the route handler to fix build issues
 export async function PUT(request: Request) {
@@ -20,14 +20,15 @@ export async function PUT(request: Request) {
     }
 
     const transactionId = id;
-    const { status, tokens } = await request.json();
+    const { status, tokens, rejectionReason } = await request.json();
 
     // Normalize status. Expect 'completed' or 'failed' from client.
     const normalizedStatus = String(status || '').toLowerCase();
     const dbStatus = normalizedStatus === 'completed' || normalizedStatus === 'approved' ? 'completed' : 'failed';
 
-    // Update transaction status
-    const updateResult = await updateTransactionStatus(transactionId, dbStatus as any, session.user.id);
+    // Update transaction status, optionally using tokens to override credited amount
+    const creditedAmount = typeof tokens === 'number' ? tokens : (typeof tokens === 'string' && tokens ? parseFloat(tokens) : undefined);
+    const updateResult = await updateTransactionStatus(transactionId, dbStatus as any, session.user.id, creditedAmount, rejectionReason);
     
     if (!updateResult.success) {
       return NextResponse.json(
@@ -36,18 +37,7 @@ export async function PUT(request: Request) {
       );
     }
 
-    // If transaction is approved and tokens are provided, update user tokens
-    if (dbStatus === 'completed' && typeof tokens === 'number' && tokens > 0) {
-      const transaction = updateResult.transaction;
-      // Credit the user's wallet with the provided tokens amount
-      const updateTokensResult = await updateUserTokens(transaction.user_id, tokens);
-      if (!updateTokensResult.success) {
-        return NextResponse.json(
-          { success: false, message: 'Failed to update user tokens' },
-          { status: 500 }
-        );
-      }
-    }
+    // No separate updateUserTokens call; credited amount is handled by updateTransactionStatus via creditedAmount parameter.
 
     return NextResponse.json({ success: true });
   } catch (error) {

@@ -9,7 +9,7 @@ import Image from 'next/image';
 import { UserSidebar } from '@/components/ui/UserSidebar';
 import { UserHeader } from '@/components/ui/UserHeader';
 import { CopyTradeSidebar } from '@/components/ui/CopyTradeSidebar';
-import  Button  from '@/components/ui/Button';
+import Button from '@/components/ui/Button';
 import ThemeColorToggle from '@/components/ui/ThemeColorToggle';
 import MobileBottomNav from '@/components/ui/MobileBottomNav';
 import { useIsMobile } from '@/hooks/use-mobile';
@@ -30,6 +30,7 @@ const UserLayout: React.FC<UserLayoutProps> = ({ children }) => {
   const [notifOpen, setNotifOpen] = useState(false);
   const [notifCount, setNotifCount] = useState(0);
   const [notifList, setNotifList] = useState<Array<{ id: string; message: string; createdAt?: string }>>([]);
+  const [walletBalance, setWalletBalance] = useState<number | null>(null);
 
   // ── Auth redirect ─────────────────────────────────────
   useEffect(() => {
@@ -38,9 +39,11 @@ const UserLayout: React.FC<UserLayoutProps> = ({ children }) => {
     }
   }, [status, router, pathname]);
 
-  // ── Account enabled check (unchanged) ───────────────────
+  // ── Account enabled check and notifications ───────────────────
   useEffect(() => {
-    const checkUserStatus = async () => {
+    let timer: NodeJS.Timeout | null = null;
+
+    const loadUserNotifications = async () => {
       if (session?.user?.id) {
         try {
           const res = await fetch(`/api/users?id=${encodeURIComponent(session.user.id)}`);
@@ -54,60 +57,80 @@ const UserLayout: React.FC<UserLayoutProps> = ({ children }) => {
           if (data.user?.enabled === false) {
             await handleLogout();
           }
-        } catch (e) {
-          console.error('Error checking user status:', e);
+          if (typeof data.user?.wallet_balance === 'number') {
+            setWalletBalance(data.user.wallet_balance);
+          }
+          try {
+            const [txRes, runRes] = await Promise.all([
+              fetch('/api/wallet/transactions', { cache: 'no-store' }),
+              fetch('/api/strategies/running', { cache: 'no-store' }),
+            ]);
+            const txData = await txRes.json().catch(() => ({}));
+            const runData = await runRes.json().catch(() => ({}));
+            const txList: any[] = txData?.transactions || [];
+            const myTx = txList.filter(t => t.user_id === session.user.id);
+            const txMessages = myTx
+              .filter(t => typeof t.admin_message === 'string' && t.admin_message.trim().length > 0)
+              .map(m => ({ id: `tx-${m.id}`, message: `${m.admin_message} ${m.admin_message_status ? `(${m.admin_message_status})` : ''}`, createdAt: m.updated_at || m.created_at }));
+
+            const runList: any[] = runData?.strategies || [];
+            const runMessages = runList
+              .filter(r => typeof (r as any).adminStatus === 'string' && (r as any).adminStatus.trim().length > 0)
+              .map(r => {
+                const s = ((r as any).adminStatus as string).toLowerCase();
+                const label = s === 'running' ? 'Marked running' : s === 'in-process' ? 'Processing started' : s.startsWith('wrong-account') ? 'Wrong account details' : s;
+                return { id: `run-${(r as any).id}`, message: `Strategy ${(r as any).name}: ${label}`, createdAt: (r as any).updatedAt };
+              });
+
+            const all = [...txMessages, ...runMessages]
+              .filter(m => m.message && m.message.trim().length > 0)
+              .sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime())
+              .slice(0, 10);
+
+            setNotifCount(all.length);
+            setNotifList(all);
+          } catch {
+            setNotifCount(0);
+            setNotifList([]);
+          }
+        } catch (error) {
+          console.error('Failed to load user data:', error);
         }
       }
     };
 
-    if (status === 'authenticated' && session?.user?.id) {
-      checkUserStatus();
-      const id = setInterval(checkUserStatus, 30000); // Increased interval to 30s
-      return () => clearInterval(id);
-    }
-  }, [session?.user?.id, status, router]);
-
-  useEffect(() => {
-    let timer: any;
-    const loadUserNotifications = async () => {
-      if (!session?.user?.id) return;
-      try {
-        const [txRes, runRes] = await Promise.all([
-          fetch('/api/wallet/transactions', { cache: 'no-store' }),
-          fetch('/api/strategies/running', { cache: 'no-store' }),
-        ]);
-        const txData = await txRes.json().catch(() => ({}));
-        const runData = await runRes.json().catch(() => ({}));
-        const txList: any[] = txData?.transactions || [];
-        const myTx = txList.filter(t => t.user_id === session.user.id);
-        const txMessages = myTx
-          .filter(t => typeof t.admin_message === 'string' && t.admin_message.trim().length > 0)
-          .map(m => ({ id: `tx-${m.id}`, message: `${m.admin_message} ${m.admin_message_status ? `(${m.admin_message_status})` : ''}`, createdAt: m.updated_at || m.created_at }));
-
-        const runList: any[] = runData?.strategies || [];
-        const runMessages = runList
-          .filter(r => typeof (r as any).adminStatus === 'string' && (r as any).adminStatus.trim().length > 0)
-          .map(r => {
-            const s = ((r as any).adminStatus as string).toLowerCase();
-            const label = s === 'running' ? 'Marked running' : s === 'in-process' ? 'Processing started' : s.startsWith('wrong-account') ? 'Wrong account details' : s;
-            return { id: `run-${(r as any).id}`, message: `Strategy ${(r as any).name}: ${label}`, createdAt: (r as any).updatedAt };
-          });
-
-        const all = [...txMessages, ...runMessages]
-          .filter(m => m.message && m.message.trim().length > 0)
-          .sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime())
-          .slice(0, 10);
-
-        setNotifCount(all.length);
-        setNotifList(all);
-      } catch {
-        setNotifCount(0);
-        setNotifList([]);
-      }
-    };
     loadUserNotifications();
     timer = setInterval(loadUserNotifications, 10000);
-    return () => timer && clearInterval(timer);
+
+    return () => {
+      if (timer) clearInterval(timer);
+    };
+  }, [session?.user?.id]);
+
+  // SSE subscription for wallet/transaction events
+  useEffect(() => {
+    if (!session?.user?.id) return;
+    const userId = session.user.id as string;
+    const source = new EventSource(`/api/events/wallet?userId=${encodeURIComponent(userId)}`);
+    source.onmessage = (e) => {
+      try {
+        const data = JSON.parse(e.data);
+        if (!data) return;
+        if (data.type === 'transaction_update' || data.type === 'analysis_charge') {
+          if (typeof data.walletBalance === 'number') setWalletBalance(data.walletBalance);
+          // Add a notification to list
+          if (data.transaction && data.type === 'transaction_update') {
+            const txMsg = data.transaction.admin_message || `Transaction ${data.transaction.id} updated: ${data.transaction.status}`;
+            setNotifList(prev => [{ id: `tx-${data.transaction.id}`, message: txMsg, createdAt: data.transaction.updated_at || data.transaction.created_at }, ...prev].slice(0, 10));
+            setNotifCount(prev => Math.min(99, prev + 1));
+          }
+        }
+      } catch (err) {
+        // ignore
+      }
+    };
+    source.onerror = () => source.close();
+    return () => source.close();
   }, [session?.user?.id]);
 
   if (status === 'loading' || status === 'unauthenticated') {
@@ -120,7 +143,8 @@ const UserLayout: React.FC<UserLayoutProps> = ({ children }) => {
 
   const handleLogout = async () => {
     try {
-      await fetch('/api/auth/signout', { method: 'POST', credentials: 'include' });
+      // Use NextAuth signOut to invalidate session, then clear local storage
+      await signOut({ redirect: false });
       sessionStorage.clear();
       localStorage.clear();
       router.push('/');
@@ -137,6 +161,10 @@ const UserLayout: React.FC<UserLayoutProps> = ({ children }) => {
     { id: 'billing', icon: <FiCreditCard className="h-5 w-5" />, label: 'Billing', path: '/profile/billing' },
     { id: 'profile', icon: <FiUser className="h-5 w-5" />, label: 'Profile', path: '/dashboard?tab=profile' },
   ];
+  // Add wallet navigation if not present
+  if (!navigationItems.some(n => n.id === 'wallet')) {
+    navigationItems.splice(3, 0, { id: 'wallet', icon: <FiDollarSign className="h-5 w-5" />, label: 'Wallet', path: '/wallet' });
+  }
 
   // ── Desktop Sidebar (Admin Style) ─────────────────────────────────────
   const DesktopSidebar = () => (
@@ -155,23 +183,22 @@ const UserLayout: React.FC<UserLayoutProps> = ({ children }) => {
       </div>
 
       {/* Navigation */}
-       <nav className="flex-1 space-y-2 p-4">
-         {navigationItems.map((item) => (
-           <Link
-             key={item.path}
-             href={item.path}
-             title={item.label}
-             aria-label={item.label}
-             className={`flex items-center justify-center rounded-lg w-12 h-12 text-sm transition-colors fx-3d-card ${
-               pathname === item.path.split('?')[0] || (item.path.includes('strategies') && pathname.startsWith('/strategies'))
-                 ? 'text-white'
-                 : 'text-gray-700 dark:text-gray-300'
-             }`}
-           >
-             <span className="fx-3d-icon">{item.icon}</span>
-           </Link>
-         ))}
-       </nav>
+      <nav className="flex-1 space-y-2 p-4">
+        {navigationItems.map((item) => (
+          <Link
+            key={item.path}
+            href={item.path}
+            title={item.label}
+            aria-label={item.label}
+            className={`flex items-center justify-center rounded-lg w-12 h-12 text-sm transition-colors fx-3d-card ${pathname === item.path.split('?')[0] || (item.path.includes('strategies') && pathname.startsWith('/strategies'))
+              ? 'text-white'
+              : 'text-gray-700 dark:text-gray-300'
+              }`}
+          >
+            <span className="fx-3d-icon">{item.icon}</span>
+          </Link>
+        ))}
+      </nav>
 
       {/* Logout */}
       <div className="border-t border-gray-200 dark:border-gray-700 p-4">
@@ -213,7 +240,7 @@ const UserLayout: React.FC<UserLayoutProps> = ({ children }) => {
               <h1 className="text-lg md:text-xl font-semibold text-[#00d09c]">Copy Trade</h1>
             </div>
           </div>
-          
+
           <div className="flex items-center gap-3">
             {(pathname?.startsWith('/strategies/') && pathname !== '/strategies') && (
               <Button
@@ -283,7 +310,7 @@ const UserLayout: React.FC<UserLayoutProps> = ({ children }) => {
             {children}
           </div>
         </main>
-        
+
         {/* Footer */}
         <footer className="py-3 px-6 text-xs text-gray-400 border-t border-[#1b2e4b] overflow-x-hidden">
           <div className="flex justify-between items-center">

@@ -14,7 +14,8 @@ import Input from '@/components/ui/Input';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { useToast } from '@/components/ui/use-toast';
-import { Check, X, RefreshCw, Eye, Mail, Loader2, FileText } from 'lucide-react';
+import { Check, X, RefreshCw, Eye, Mail, Loader2, FileText, History, Clock } from 'lucide-react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 interface Transaction {
   id: string;
@@ -37,6 +38,9 @@ interface Transaction {
     name: string;
     email: string;
   };
+  admin_message?: string;
+  admin_message_status?: 'pending' | 'sent' | 'resolved';
+  history?: Array<{ timestamp: string; admin_id?: string; status: string; reason?: string; credited_amount?: number }>;
 }
 
 interface PaymentVerificationProps {
@@ -58,34 +62,58 @@ export default function PaymentVerification({ onSendEmail }: PaymentVerification
   const [processingAction, setProcessingAction] = useState(false);
   const [rejectionReason, setRejectionReason] = useState<string>('');
   const [approveTokens, setApproveTokens] = useState<number | string>('');
+  const [activeTab, setActiveTab] = useState<'pending' | 'history'>('pending');
 
   useEffect(() => {
-    fetchPendingTransactions();
+    fetchTransactions(activeTab);
+  }, [activeTab]);
+
+  // SSE subscription to update transactions in real-time
+  useEffect(() => {
+    const source = new EventSource('/api/events/wallet');
+    source.onmessage = (e) => {
+      try {
+        const d = JSON.parse(e.data);
+        if (d && d.type === 'transaction_update' && d.transaction) {
+          setTransactions(prev => {
+            const idx = prev.findIndex(t => t.id === d.transaction.id);
+            if (idx === -1) return [d.transaction, ...prev];
+            const clone = [...prev];
+            clone[idx] = d.transaction;
+            return clone;
+          });
+        }
+      } catch (err) {
+        // ignore
+      }
+    };
+    source.onerror = () => source.close();
+    return () => source.close();
   }, []);
 
-  const fetchPendingTransactions = async () => {
+  const fetchTransactions = async (status: 'pending' | 'history') => {
     setLoading(true);
     setError(null);
-    
+
     try {
-      // Get all pending transactions for admin verification
-      const response = await fetch('/api/admin/transactions');
-      
+      // Get transactions based on status
+      const response = await fetch(`/api/admin/transactions?status=${status}`);
+
       if (!response.ok) {
         throw new Error('Failed to fetch transactions');
       }
-      
+
       const data = await response.json();
-      
+
       if (!data.success) {
         throw new Error(data.error || 'Failed to fetch transactions');
       }
-      
+
       // Sort by date (newest first)
       data.transactions.sort((a: Transaction, b: Transaction) => {
         return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
       });
-      
+
       setTransactions(data.transactions);
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'An error occurred';
@@ -110,7 +138,7 @@ export default function PaymentVerification({ onSendEmail }: PaymentVerification
         response = await fetch(`/api/admin/transactions/${selectedTransaction.id}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ status: 'completed', tokens: Number(approveTokens) || selectedTransaction.amount }),
+          body: JSON.stringify({ status: 'approved', tokens: Number(approveTokens) || selectedTransaction.amount }),
         });
       } else {
         // Reject with a required reason
@@ -120,7 +148,7 @@ export default function PaymentVerification({ onSendEmail }: PaymentVerification
         response = await fetch(`/api/admin/transactions/${selectedTransaction.id}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ status: 'failed', rejectionReason }),
+          body: JSON.stringify({ status: 'rejected', rejectionReason }),
         });
       }
 
@@ -129,19 +157,23 @@ export default function PaymentVerification({ onSendEmail }: PaymentVerification
       }
 
       const result = await response.json();
-      
-      // Refresh the transactions list
-      await fetchPendingTransactions();
-      
+
+      // Optimistic update: remove from list if in pending tab, or update if in history
+      if (activeTab === 'pending') {
+        setTransactions(prev => prev.filter(t => t.id !== selectedTransaction.id));
+      } else {
+        setTransactions(prev => prev.map(t => t.id === selectedTransaction.id ? result.transaction : t));
+      }
+
       // Close dialog
       setActionDialogOpen(false);
       setRejectionReason('');
-      
-      toast({ 
-        variant: 'default', 
-        title: 'Success', 
-        description: actionType === 'approve' 
-          ? `Transaction approved and tokens credited to user account` 
+
+      toast({
+        variant: 'default',
+        title: 'Success',
+        description: actionType === 'approve'
+          ? `Transaction approved and tokens credited to user account`
           : 'Transaction rejected successfully'
       });
     } catch (err) {
@@ -158,23 +190,23 @@ export default function PaymentVerification({ onSendEmail }: PaymentVerification
     try {
       // In a real implementation, this would call an API to send emails
       console.log(`Simulating sending low balance email to ${userEmail}`);
-      
+
       // For now, just show a success message
-      toast({ 
-        variant: 'default', 
-        title: 'Success', 
-        description: 'Email reminder sent successfully' 
+      toast({
+        variant: 'default',
+        title: 'Success',
+        description: 'Email reminder sent successfully'
       });
-      
+
       // Call the parent callback if provided
       if (onSendEmail) {
         onSendEmail();
       }
     } catch (err) {
-      toast({ 
-        variant: 'destructive', 
-        title: 'Error', 
-        description: 'Failed to send email reminder' 
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: 'Failed to send email reminder'
       });
       console.error('Error sending email:', err);
     }
@@ -234,159 +266,75 @@ export default function PaymentVerification({ onSendEmail }: PaymentVerification
       )}
 
       <Card>
-        <CardContent>
-          <div className="flex justify-between items-center mb-6">
-            <h3 className="text-lg font-semibold">Pending Transactions</h3>
-            <Button 
-              variant="default" 
-              size="sm"
-              onClick={fetchPendingTransactions}
-              disabled={loading}
-            >
-              <RefreshCw className="h-4 w-4 mr-2" />
-              Refresh
-            </Button>
-          </div>
+        <CardContent className="pt-6">
+          <Tabs defaultValue="pending" value={activeTab} onValueChange={(v) => setActiveTab(v as 'pending' | 'history')}>
+            <div className="flex justify-between items-center mb-6">
+              <TabsList>
+                <TabsTrigger value="pending" className="flex items-center">
+                  <Clock className="w-4 h-4 mr-2" />
+                  Pending
+                </TabsTrigger>
+                <TabsTrigger value="history" className="flex items-center">
+                  <History className="w-4 h-4 mr-2" />
+                  History
+                </TabsTrigger>
+              </TabsList>
 
-          {loading ? (
-            <div className="flex justify-center items-center py-12">
-              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+              <Button
+                variant="default"
+                size="sm"
+                onClick={() => fetchTransactions(activeTab)}
+                disabled={loading}
+              >
+                <RefreshCw className="h-4 w-4 mr-2" />
+                Refresh
+              </Button>
             </div>
-          ) : transactions.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-12 text-center text-muted-foreground">
-              <p>No pending transactions to verify.</p>
-            </div>
-          ) : (
-            <div className="rounded-md border">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Transaction ID</TableHead>
-                    <TableHead>User</TableHead>
-                    <TableHead>Email</TableHead>
-                    <TableHead className="text-right">Amount ($)</TableHead>
-                    <TableHead>Payment Method</TableHead>
-                    <TableHead>Platform</TableHead>
-                    <TableHead>Terms</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Submitted At</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {transactions.map((transaction) => (
-                    <TableRow key={transaction.id}>
-                      <TableCell className="font-mono text-sm">
-                        {transaction.transaction_id}
-                      </TableCell>
-                      <TableCell>{transaction.user?.name || 'Unknown'}</TableCell>
-                      <TableCell>{transaction.user?.email || 'Unknown'}</TableCell>
-                      <TableCell className="text-right">${transaction.amount.toFixed(2)}</TableCell>
-                      <TableCell>{transaction.payment_method}</TableCell>
-                      <TableCell>{transaction.platform || '-'}</TableCell>
-                      <TableCell>
-                        {transaction.terms_accepted ? (
-                          <Badge>Accepted</Badge>
-                        ) : (
-                          <Badge variant="secondary">No</Badge>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        {transaction.status === 'pending' ? (
-                          <Badge variant="outline" className="bg-yellow-50 text-yellow-700 border-yellow-200">Pending</Badge>
-                        ) : transaction.status === 'in-process' ? (
-                          <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">In Process</Badge>
-                        ) : transaction.status === 'completed' ? (
-                          <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">Completed</Badge>
-                        ) : (
-                          <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200">Failed</Badge>
-                        )}
-                      </TableCell>
-                      <TableCell>{formatDate(transaction.created_at)}</TableCell>
-                      <TableCell className="text-right">
-                        <div className="inline-flex space-x-2">
-                          <TooltipProvider>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  className="h-8 w-8"
-                                  onClick={() => handleViewReceipt(transaction)}
-                                  disabled={!transaction.receipt_path}
-                                >
-                                  <Eye className="h-4 w-4" />
-                                </Button>
-                              </TooltipTrigger>
-                              <TooltipContent>
-                                <p>View Receipt</p>
-                              </TooltipContent>
-                            </Tooltip>
-                          </TooltipProvider>
 
-                          <TooltipProvider>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  className="h-8 w-8"
-                                  onClick={() => handleViewDetails(transaction)}
-                                >
-                                  <FileText className="h-4 w-4" />
-                                </Button>
-                              </TooltipTrigger>
-                              <TooltipContent>
-                                <p>View Details</p>
-                              </TooltipContent>
-                            </Tooltip>
-                          </TooltipProvider>
-                          
-                          <TooltipProvider>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  className="h-8 w-8 text-green-600 hover:text-green-700 hover:bg-green-50"
-                                  onClick={() => handleActionDialogOpen(transaction, 'approve')}
-                                  disabled={transaction.status !== 'pending'}
-                                >
-                                  <Check className="h-4 w-4" />
-                                </Button>
-                              </TooltipTrigger>
-                              <TooltipContent>
-                                <p>Approve Payment</p>
-                              </TooltipContent>
-                            </Tooltip>
-                          </TooltipProvider>
-                          
-                          <TooltipProvider>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  className="h-8 w-8 text-red-600 hover:text-red-700 hover:bg-red-50"
-                                  onClick={() => handleActionDialogOpen(transaction, 'reject')}
-                                  disabled={transaction.status !== 'pending'}
-                                >
-                                  <X className="h-4 w-4" />
-                                </Button>
-                              </TooltipTrigger>
-                              <TooltipContent>
-                                <p>Reject Payment</p>
-                              </TooltipContent>
-                            </Tooltip>
-                          </TooltipProvider>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          )}
+            <TabsContent value="pending" className="mt-0">
+              {loading ? (
+                <div className="flex justify-center items-center py-12">
+                  <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                </div>
+              ) : transactions.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-12 text-center text-muted-foreground">
+                  <p>No pending transactions to verify.</p>
+                </div>
+              ) : (
+                <TransactionTable
+                  transactions={transactions}
+                  onViewReceipt={handleViewReceipt}
+                  onViewDetails={handleViewDetails}
+                  onApprove={(t) => handleActionDialogOpen(t, 'approve')}
+                  onReject={(t) => handleActionDialogOpen(t, 'reject')}
+                  formatDate={formatDate}
+                  showActions={true}
+                />
+              )}
+            </TabsContent>
+
+            <TabsContent value="history" className="mt-0">
+              {loading ? (
+                <div className="flex justify-center items-center py-12">
+                  <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                </div>
+              ) : transactions.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-12 text-center text-muted-foreground">
+                  <p>No transaction history found.</p>
+                </div>
+              ) : (
+                <TransactionTable
+                  transactions={transactions}
+                  onViewReceipt={handleViewReceipt}
+                  onViewDetails={handleViewDetails}
+                  onApprove={(t) => handleActionDialogOpen(t, 'approve')}
+                  onReject={(t) => handleActionDialogOpen(t, 'reject')}
+                  formatDate={formatDate}
+                  showActions={false}
+                />
+              )}
+            </TabsContent>
+          </Tabs>
         </CardContent>
       </Card>
 
@@ -435,8 +383,6 @@ export default function PaymentVerification({ onSendEmail }: PaymentVerification
         </DialogFooter>
       </Dialog>
 
-      {/* Removed Token Allocation Dialog: tokens are auto-credited on approval */}
-
       {/* Action Dialog */}
       <Dialog open={actionDialogOpen} onOpenChange={setActionDialogOpen}>
         <DialogContent className="sm:max-w-md">
@@ -450,7 +396,7 @@ export default function PaymentVerification({ onSendEmail }: PaymentVerification
                 : 'Provide a reason and confirm rejection of this payment.'}
             </DialogDescription>
           </DialogHeader>
-          
+
           {selectedTransaction && (
             <div className="grid gap-4 py-4">
               <div className="grid grid-cols-4 items-center gap-4">
@@ -501,13 +447,13 @@ export default function PaymentVerification({ onSendEmail }: PaymentVerification
               )}
             </div>
           )}
-          
+
           <DialogFooter>
             <Button variant="outline" onClick={() => setActionDialogOpen(false)} disabled={processingAction}>
               Cancel
             </Button>
-            <Button 
-              onClick={handleTransactionAction} 
+            <Button
+              onClick={handleTransactionAction}
               variant={actionType === 'approve' ? 'default' : 'primary'}
               disabled={processingAction || (actionType === 'reject' && (!rejectionReason || rejectionReason.trim().length === 0))}
             >
@@ -563,6 +509,46 @@ export default function PaymentVerification({ onSendEmail }: PaymentVerification
                   )}
                 </div>
               </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label className="text-right">Status</Label>
+                <div className="col-span-3">
+                  {selectedTransaction.status === 'pending' ? (
+                    <Badge variant="outline" className="bg-yellow-50 text-yellow-700 border-yellow-200">Pending</Badge>
+                  ) : selectedTransaction.status === 'in-process' ? (
+                    <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">In Process</Badge>
+                  ) : selectedTransaction.status === 'completed' ? (
+                    <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">Completed</Badge>
+                  ) : (
+                    <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200">Failed</Badge>
+                  )}
+                </div>
+              </div>
+              {selectedTransaction.rejection_reason && (
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label className="text-right text-red-600">Rejection Reason</Label>
+                  <div className="col-span-3">
+                    <span className="text-red-600">{selectedTransaction.rejection_reason}</span>
+                  </div>
+                </div>
+              )}
+              {selectedTransaction.history && selectedTransaction.history.length > 0 && (
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label className="text-right">History</Label>
+                  <div className="col-span-3">
+                    <div className="text-sm text-gray-300 space-y-2">
+                      {selectedTransaction.history.map((h: any, idx: number) => (
+                        <div key={idx} className="bg-[#0b1220] p-2 rounded">
+                          <div className="text-xs text-gray-400">{new Date(h.timestamp).toLocaleString()}</div>
+                          <div className="text-sm">Status: <span className="font-medium">{h.status}</span></div>
+                          {h.admin_id && <div className="text-sm">Admin: <span className="font-medium">{h.admin_id}</span></div>}
+                          {h.reason && <div className="text-sm text-red-300">Reason: {h.reason}</div>}
+                          {typeof h.credited_amount === 'number' && <div className="text-sm">Credited: ${h.credited_amount}</div>}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           )}
           <DialogFooter>
@@ -570,6 +556,150 @@ export default function PaymentVerification({ onSendEmail }: PaymentVerification
           </DialogFooter>
         </DialogContent>
       </Dialog>
+    </div>
+  );
+}
+
+function TransactionTable({
+  transactions,
+  onViewReceipt,
+  onViewDetails,
+  onApprove,
+  onReject,
+  formatDate,
+  showActions
+}: {
+  transactions: Transaction[],
+  onViewReceipt: (t: Transaction) => void,
+  onViewDetails: (t: Transaction) => void,
+  onApprove: (t: Transaction) => void,
+  onReject: (t: Transaction) => void,
+  formatDate: (d: string) => string,
+  showActions: boolean
+}) {
+  return (
+    <div className="rounded-md border">
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Transaction ID</TableHead>
+            <TableHead>User</TableHead>
+            <TableHead>Email</TableHead>
+            <TableHead className="text-right">Amount ($)</TableHead>
+            <TableHead>Payment Method</TableHead>
+            <TableHead>Platform</TableHead>
+            <TableHead>Status</TableHead>
+            <TableHead>Submitted At</TableHead>
+            <TableHead className="text-right">Actions</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {transactions.map((transaction) => (
+            <TableRow key={transaction.id}>
+              <TableCell className="font-mono text-sm">
+                {transaction.transaction_id}
+              </TableCell>
+              <TableCell>{transaction.user?.name || 'Unknown'}</TableCell>
+              <TableCell>{transaction.user?.email || 'Unknown'}</TableCell>
+              <TableCell className="text-right">${transaction.amount.toFixed(2)}</TableCell>
+              <TableCell>{transaction.payment_method}</TableCell>
+              <TableCell>{transaction.platform || '-'}</TableCell>
+              <TableCell>
+                {transaction.status === 'pending' ? (
+                  <Badge variant="outline" className="bg-yellow-50 text-yellow-700 border-yellow-200">Pending</Badge>
+                ) : transaction.status === 'in-process' ? (
+                  <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">In Process</Badge>
+                ) : transaction.status === 'completed' ? (
+                  <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">Completed</Badge>
+                ) : (
+                  <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200">Failed</Badge>
+                )}
+              </TableCell>
+              <TableCell>{formatDate(transaction.created_at)}</TableCell>
+              <TableCell className="text-right">
+                <div className="inline-flex space-x-2">
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-8 w-8"
+                          onClick={() => onViewReceipt(transaction)}
+                          disabled={!transaction.receipt_path}
+                        >
+                          <Eye className="h-4 w-4" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>View Receipt</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-8 w-8"
+                          onClick={() => onViewDetails(transaction)}
+                        >
+                          <FileText className="h-4 w-4" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>View Details</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+
+                  {showActions && transaction.status === 'pending' && (
+                    <>
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="h-8 w-8 text-green-600 hover:text-green-700 hover:bg-green-50"
+                              onClick={() => onApprove(transaction)}
+                            >
+                              <Check className="h-4 w-4" />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p>Approve Payment</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="h-8 w-8 text-red-600 hover:text-red-700 hover:bg-red-50"
+                              onClick={() => onReject(transaction)}
+                            >
+                              <X className="h-4 w-4" />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p>Reject Payment</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    </>
+                  )}
+                </div>
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
     </div>
   );
 }

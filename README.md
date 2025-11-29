@@ -20,6 +20,15 @@ You can start editing the page by modifying `app/page.tsx`. The page auto-update
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 
+## Optional Environment variables for Vision validation
+
+The project supports optional AI vision integration to validate uploaded images more reliably. Configure one of the following environment variables to enable model-based image validation:
+
+- `OPENAI_API_KEY` — If set, the server will attempt to call the OpenAI Responses API to classify images as trading charts.
+- `VISION_API_KEY` — Alternate key for other vision providers.
+
+If neither key is set, the server uses heuristic checks (image MIME type and dimensions) as a fallback.
+
 ## Learn More
 
 To learn more about Next.js, take a look at the following resources:

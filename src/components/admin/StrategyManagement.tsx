@@ -38,10 +38,7 @@ const StrategyManagement: React.FC = () => {
   const [isAdding, setIsAdding] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [currentStrategy, setCurrentStrategy] = useState<Partial<Strategy>>({});
-  // Local range strings for plan inputs; first number will be used for payments
-  const [planRanges, setPlanRanges] = useState<{ Pro?: string; Expert?: string; Premium?: string }>({});
-  // Percent values per plan for user-facing display
-  const [planPercents, setPlanPercents] = useState<{ Pro?: number; Expert?: number; Premium?: number }>({});
+
   const [parameters, setParameters] = useState<ParameterRow[]>([{ key: '', value: '', id: `param-${Date.now()}` }]);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -73,23 +70,22 @@ const StrategyManagement: React.FC = () => {
     fetchStrategies();
   }, []);
 
-// Reset form for adding new strategy
-const resetAddForm = () => {
-  setCurrentStrategy({
-    name: '',
-    description: '',
-    imageUrl: '/strategy1.svg',
-    minCapital: undefined,
-    avgDrawdown: undefined,
-    riskReward: undefined,
-    winStreak: undefined,
-    tag: '',
-    planPrices: { Pro: undefined, Expert: undefined, Premium: undefined },
-     details: '',
-    enabled: true,
-    contentType: 'html'
-  });
-    setPlanRanges({ Pro: '', Expert: '', Premium: '' });
+  // Reset form for adding new strategy
+  const resetAddForm = () => {
+    setCurrentStrategy({
+      name: '',
+      description: '',
+      imageUrl: '/strategy1.svg',
+      minCapital: undefined,
+      avgDrawdown: undefined,
+      riskReward: undefined,
+      winStreak: undefined,
+      tag: '',
+      price: 0,
+      details: '',
+      enabled: true,
+      contentType: 'html'
+    });
     setParameters([{ key: '', value: '', id: `param-${Date.now()}` }]);
     setError(null);
     setSuccess(null);
@@ -108,18 +104,7 @@ const resetAddForm = () => {
   // Open edit strategy dialog
   const handleEditClick = (strategy: Strategy) => {
     setCurrentStrategy({ ...strategy });
-    // Initialize range strings from existing numeric prices (fallback to "+" style)
-    setPlanRanges({
-      Pro: strategy.planPrices?.Pro !== undefined ? `$${strategy.planPrices.Pro}+` : '',
-      Expert: strategy.planPrices?.Expert !== undefined ? `$${strategy.planPrices.Expert}+` : '',
-      Premium: strategy.planPrices?.Premium !== undefined ? `$${strategy.planPrices.Premium}+` : ''
-    });
-    // Initialize percents from planDetails if present
-    setPlanPercents({
-      Pro: strategy as any && (strategy as any).planDetails?.Pro?.percent,
-      Expert: strategy as any && (strategy as any).planDetails?.Expert?.percent,
-      Premium: strategy as any && (strategy as any).planDetails?.Premium?.percent,
-    });
+
     setParameters(Object.entries(strategy.parameters).map(([key, value]) => ({
       key,
       value,
@@ -131,6 +116,7 @@ const resetAddForm = () => {
     setSuccess(null);
   };
 
+
   // Handle input changes
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -139,7 +125,7 @@ const resetAddForm = () => {
       [name]: name === 'performance' ? parseFloat(value) || 0 : value
     }));
   };
-  
+
   // Handle file selection
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -153,7 +139,7 @@ const resetAddForm = () => {
       setSelectedIcon(e.target.files[0]);
     }
   };
-  
+
   // Handle content type change
   const handleContentTypeChange = (value: 'html' | 'pdf' | 'text') => {
     setContentType(value);
@@ -162,7 +148,7 @@ const resetAddForm = () => {
       contentType: value
     }));
   };
-  
+
   // Handle enabled status change
   const handleEnabledChange = (checked: boolean) => {
     setCurrentStrategy(prev => ({
@@ -171,18 +157,11 @@ const resetAddForm = () => {
     }));
   };
 
-  // Parse a price range string and return the first numeric value
-  const parseFirstPrice = (range: string): number | undefined => {
-    // Extract the first group of digits in the string
-    const match = range.replace(/,/g, '').match(/\d+(?:\.\d+)?/);
-    if (!match) return undefined;
-    const val = Number(match[0]);
-    return isNaN(val) ? undefined : val;
-  };
+
 
   // Handle parameter input changes
   const handleParameterChange = (id: string, field: 'key' | 'value', value: string) => {
-    setParameters(prev => prev.map(param => 
+    setParameters(prev => prev.map(param =>
       param.id === id ? { ...param, [field]: value } : param
     ));
   };
@@ -233,7 +212,7 @@ const resetAddForm = () => {
     try {
       // Create FormData for file upload
       const formData = new FormData();
-      
+
       // Append individual fields to formData
       formData.append('name', currentStrategy.name || '');
       formData.append('description', currentStrategy.description || '');
@@ -250,20 +229,8 @@ const resetAddForm = () => {
       if (currentStrategy.riskReward !== undefined) formData.append('riskReward', String(currentStrategy.riskReward));
       if (currentStrategy.winStreak !== undefined) formData.append('winStreak', String(currentStrategy.winStreak));
       if (currentStrategy.tag !== undefined) formData.append('tag', String(currentStrategy.tag));
+      if (currentStrategy.price !== undefined) formData.append('price', String(currentStrategy.price));
 
-      // Plans
-      const pp = currentStrategy.planPrices || {};
-      if (pp.Pro !== undefined) formData.append('planPro', String(pp.Pro));
-      if (pp.Expert !== undefined) formData.append('planExpert', String(pp.Expert));
-      if (pp.Premium !== undefined) formData.append('planPremium', String(pp.Premium));
-
-      // Plan display details
-      if (planRanges.Pro) formData.append('planProLabel', planRanges.Pro);
-      if (planRanges.Expert) formData.append('planExpertLabel', planRanges.Expert);
-      if (planRanges.Premium) formData.append('planPremiumLabel', planRanges.Premium);
-      if (planPercents.Pro !== undefined) formData.append('planProPercent', String(planPercents.Pro));
-      if (planPercents.Expert !== undefined) formData.append('planExpertPercent', String(planPercents.Expert));
-      if (planPercents.Premium !== undefined) formData.append('planPremiumPercent', String(planPercents.Premium));
 
       // Add file if selected
       if (selectedFile) {
@@ -281,12 +248,12 @@ const resetAddForm = () => {
           method: 'POST',
           body: formData,
         });
-        
+
         if (!response.ok) {
           const errorData = await response.json().catch(() => ({ error: 'Unknown server error' }));
           throw new Error(errorData.error || 'Failed to create strategy');
         }
-        
+
         result = await response.json();
       } else if (isEditing && currentStrategy.id) {
         // Update existing strategy via API
@@ -294,19 +261,19 @@ const resetAddForm = () => {
           method: 'PUT',
           body: formData,
         });
-        
+
         if (!response.ok) {
           const errorData = await response.json().catch(() => ({ error: 'Unknown server error' }));
           throw new Error(errorData.error || 'Failed to update strategy');
         }
-        
+
         result = await response.json();
       }
 
       if (result?.success) {
         fetchStrategies(); // Refresh the list
         setSuccess(isAdding ? 'Strategy created successfully' : 'Strategy updated successfully');
-        
+
         // Close the dialog after a short delay to show the success message
         setTimeout(() => {
           setIsAdding(false);
@@ -331,13 +298,13 @@ const resetAddForm = () => {
       const response = await fetch(`/api/strategies?id=${id}`, {
         method: 'DELETE',
       });
-      
+
       if (!response.ok) {
         throw new Error('Failed to delete strategy');
       }
-      
+
       const result = await response.json();
-      
+
       if (result.success) {
         fetchStrategies(); // Refresh the list
         setSuccess('Strategy deleted successfully');
@@ -374,14 +341,14 @@ const resetAddForm = () => {
       {/* Success/Error Messages */}
       {success && (
         <Alert className="bg-green-50 text-green-800 border-green-200">
-          <FiCheck className="h-4 w-4 mr-2" /> 
+          <FiCheck className="h-4 w-4 mr-2" />
           <AlertTitle>Success</AlertTitle>
           <AlertDescription>{success}</AlertDescription>
         </Alert>
       )}
       {error && (
         <Alert className="bg-red-50 text-red-800 border-red-200">
-          <FiAlertCircle className="h-4 w-4 mr-2" /> 
+          <FiAlertCircle className="h-4 w-4 mr-2" />
           <AlertTitle>Error</AlertTitle>
           <AlertDescription>{error}</AlertDescription>
         </Alert>
@@ -490,7 +457,7 @@ const resetAddForm = () => {
                     <Badge variant="outline" className="ml-1">{strategy.tag || '-'}</Badge>
                   </div>
                 </div>
-                
+
                 {/* Parameters section */}
                 <div className="mt-2">
                   <button
@@ -504,7 +471,7 @@ const resetAddForm = () => {
                     )}
                     Parameters
                   </button>
-                  
+
                   {expandedParameters[strategy.id] && (
                     <div className="mt-2 space-y-1 text-sm">
                       {Object.entries(strategy.parameters).map(([key, value]) => (
@@ -531,7 +498,7 @@ const resetAddForm = () => {
               {isAdding ? 'Create a new trading strategy that will be available to all users.' : 'Update the details of this trading strategy.'}
             </DialogDescription>
           </DialogHeader>
-          
+
           <ScrollArea className="h-[60vh] pr-4">
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="space-y-4">
@@ -550,7 +517,7 @@ const resetAddForm = () => {
                     </SelectContent>
                   </Select>
                 </div>
-                
+
                 <div className="space-y-2">
                   <Label htmlFor="file">Upload Strategy Document</Label>
                   <div className="border-2 border-dashed border-gray-300 dark:border-gray-700 rounded-md p-4">
@@ -589,7 +556,7 @@ const resetAddForm = () => {
                   required
                 />
               </div>
-              
+
               <div className="space-y-2">
                 <Label htmlFor="description">Short Description *</Label>
                 <Input
@@ -601,7 +568,7 @@ const resetAddForm = () => {
                   required
                 />
               </div>
-              
+
               <div className="space-y-2">
                 <Label htmlFor="details">Detailed Description *</Label>
                 <Textarea
@@ -614,7 +581,7 @@ const resetAddForm = () => {
                   required
                 />
               </div>
-              
+
               {/* Strategy Settings */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
@@ -634,8 +601,8 @@ const resetAddForm = () => {
                 <div className="space-y-2">
                   <Label htmlFor="enabled">Status</Label>
                   <div className="flex items-center space-x-2">
-                    <Switch 
-                      id="enabled" 
+                    <Switch
+                      id="enabled"
                       checked={currentStrategy.enabled !== false}
                       onCheckedChange={handleEnabledChange}
                     />
@@ -645,7 +612,7 @@ const resetAddForm = () => {
                   </div>
                 </div>
               </div>
-              
+
               {/* Strategy Content Upload */}
               <div className="space-y-3">
                 <Label>Upload Strategy Document (HTML or PDF) *</Label>
@@ -683,121 +650,29 @@ const resetAddForm = () => {
                 <Input id="tag" name="tag" value={currentStrategy.tag || ''} onChange={handleInputChange} placeholder="Enter tag" />
               </div>
 
-              {/* Plans: enter USD ranges; first number used for payments */}
+              {/* Token Price */}
               <Separator className="my-2" />
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="space-y-2">
-                  <Label htmlFor="planPro">Pro Price</Label>
-                  <Input
-                    id="planPro"
-                    name="planPro"
-                    type="text"
-                    placeholder="$1000-$2999"
-                    value={planRanges.Pro ?? ''}
-                    onChange={(e) => {
-                      const text = e.target.value;
-                      setPlanRanges(prev => ({ ...prev, Pro: text }));
-                      const first = parseFirstPrice(text);
-                      setCurrentStrategy(prev => ({
-                        ...prev,
-                        planPrices: { ...(prev.planPrices || {}), Pro: first }
-                      }));
-                    }}
-                  />
-                  <div className="space-y-1">
-                    <Label htmlFor="planProPercent">Pro Percent (%)</Label>
-                    <Input
-                      id="planProPercent"
-                      name="planProPercent"
-                      type="number"
-                      step="0.01"
-                      placeholder="17"
-                      value={planPercents.Pro ?? '' as any}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        const num = val === '' ? undefined : Number(val);
-                        setPlanPercents(prev => ({ ...prev, Pro: isNaN(num as any) ? undefined : num }));
-                      }}
-                    />
-                  </div>
-                  <p className="text-xs text-muted-foreground">Enter USD range; first number used for payments.</p>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="planExpert">Expert Price</Label>
-                  <Input
-                    id="planExpert"
-                    name="planExpert"
-                    type="text"
-                    placeholder="$3000-$5999"
-                    value={planRanges.Expert ?? ''}
-                    onChange={(e) => {
-                      const text = e.target.value;
-                      setPlanRanges(prev => ({ ...prev, Expert: text }));
-                      const first = parseFirstPrice(text);
-                      setCurrentStrategy(prev => ({
-                        ...prev,
-                        planPrices: { ...(prev.planPrices || {}), Expert: first }
-                      }));
-                    }}
-                  />
-                  <div className="space-y-1">
-                    <Label htmlFor="planExpertPercent">Expert Percent (%)</Label>
-                    <Input
-                      id="planExpertPercent"
-                      name="planExpertPercent"
-                      type="number"
-                      step="0.01"
-                      placeholder="15"
-                      value={planPercents.Expert ?? '' as any}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        const num = val === '' ? undefined : Number(val);
-                        setPlanPercents(prev => ({ ...prev, Expert: isNaN(num as any) ? undefined : num }));
-                      }}
-                    />
-                  </div>
-                  <p className="text-xs text-muted-foreground">Enter USD range; first number used for payments.</p>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="planPremium">Premium Price</Label>
-                  <Input
-                    id="planPremium"
-                    name="planPremium"
-                    type="text"
-                    placeholder="$6000+"
-                    value={planRanges.Premium ?? ''}
-                    onChange={(e) => {
-                      const text = e.target.value;
-                      setPlanRanges(prev => ({ ...prev, Premium: text }));
-                      const first = parseFirstPrice(text);
-                      setCurrentStrategy(prev => ({
-                        ...prev,
-                        planPrices: { ...(prev.planPrices || {}), Premium: first }
-                      }));
-                    }}
-                  />
-                  <div className="space-y-1">
-                    <Label htmlFor="planPremiumPercent">Premium Percent (%)</Label>
-                    <Input
-                      id="planPremiumPercent"
-                      name="planPremiumPercent"
-                      type="number"
-                      step="0.01"
-                      placeholder="12"
-                      value={planPercents.Premium ?? '' as any}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        const num = val === '' ? undefined : Number(val);
-                        setPlanPercents(prev => ({ ...prev, Premium: isNaN(num as any) ? undefined : num }));
-                      }}
-                    />
-                  </div>
-                  <p className="text-xs text-muted-foreground">Enter USD range; first number used for payments.</p>
-                </div>
+                <Label htmlFor="price">Token Price</Label>
+                <Input
+                  id="price"
+                  name="price"
+                  type="number"
+                  value={String(currentStrategy.price ?? 0)}
+                  onChange={(e) => {
+                    const val = parseFloat(e.target.value);
+                    setCurrentStrategy(prev => ({
+                      ...prev,
+                      price: isNaN(val) ? 0 : val
+                    }));
+                  }}
+                  placeholder="Enter token amount"
+                />
+                <p className="text-xs text-muted-foreground">Amount of tokens to deduct from user wallet.</p>
               </div>
             </form>
           </ScrollArea>
-          
+
           <DialogFooter className="mt-4">
             <Button
               type="button"

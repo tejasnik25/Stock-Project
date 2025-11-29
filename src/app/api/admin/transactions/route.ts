@@ -6,11 +6,15 @@ import { getPendingTransactions, updateTransactionStatus, sendEmailNotification,
  * GET /api/admin/transactions
  * Get all pending transactions for admin verification
  */
-export async function GET() {
+/**
+ * GET /api/admin/transactions
+ * Get transactions for admin verification (pending or history)
+ */
+export async function GET(req: NextRequest) {
   try {
     // Check if user is authenticated and is an admin
     const session = await checkAdminAuth();
-    
+
     if (!session) {
       return NextResponse.json(
         { error: 'Unauthorized' },
@@ -18,13 +22,27 @@ export async function GET() {
       );
     }
 
-    // Get all pending transactions
-    const pendingTransactions = await getPendingTransactions();
-    
+    // Get status filter from URL
+    const url = new URL(req.url);
+    const statusFilter = url.searchParams.get('status');
+
+    // Get transactions based on filter
+    const db = await import('../../../../db/dbService');
+    const allTransactions = db.readDatabase().wallet_transactions;
+
+    let filteredTransactions = allTransactions;
+
+    if (statusFilter === 'pending') {
+      filteredTransactions = allTransactions.filter(t => t.status === 'pending');
+    } else if (statusFilter === 'history') {
+      filteredTransactions = allTransactions.filter(t => t.status !== 'pending');
+    }
+    // if no filter or 'all', return all (or default to pending if preferred, but let's support explicit filters)
+
     // For each transaction, get user details
     const transactionsWithUserDetails = await Promise.all(
-      pendingTransactions.map(async (transaction) => {
-        const userResult = await getUserById(transaction.user_id);
+      filteredTransactions.map(async (transaction) => {
+        const userResult = await db.getUserById(transaction.user_id);
         return {
           ...transaction,
           user: userResult.success && userResult.user ? { name: userResult.user.name, email: userResult.user.email } : null
@@ -32,11 +50,11 @@ export async function GET() {
       })
     );
 
-    return NextResponse.json({ transactions: transactionsWithUserDetails });
+    return NextResponse.json({ success: true, transactions: transactionsWithUserDetails });
   } catch (error) {
-    console.error('Error fetching pending transactions:', error);
+    console.error('Error fetching transactions:', error);
     return NextResponse.json(
-      { error: 'Failed to fetch pending transactions' },
+      { error: 'Failed to fetch transactions' },
       { status: 500 }
     );
   }
@@ -50,7 +68,7 @@ export async function PUT(req: NextRequest) {
   try {
     // Check if user is authenticated and is an admin
     const session = await checkAdminAuth();
-    
+
     if (!session) {
       return NextResponse.json(
         { error: 'Unauthorized' },
@@ -65,7 +83,7 @@ export async function PUT(req: NextRequest) {
 
     // Get request body
     const body = await req.json();
-    const { status } = body;
+    const { status, tokens, creditedAmount, rejectionReason } = body;
 
     // Validate status
     if (!status || !['approved', 'rejected'].includes(status)) {
@@ -76,8 +94,9 @@ export async function PUT(req: NextRequest) {
     }
 
     // Update transaction status
-    const result = await updateTransactionStatus(transactionId, status as 'approved' | 'rejected', session.user.id);
-    
+    const amountToCredit = typeof tokens === 'number' ? tokens : (typeof creditedAmount === 'number' ? creditedAmount : undefined);
+    const result = await updateTransactionStatus(transactionId, status as 'approved' | 'rejected', session.user.id, amountToCredit, rejectionReason);
+
     if (!result.success || !result.transaction) {
       return NextResponse.json(
         { error: 'Failed to update transaction status' },

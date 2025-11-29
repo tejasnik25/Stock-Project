@@ -81,24 +81,8 @@ export function Sidebar() {
           </div>
           {expandPayments && (
             <div className="ml-8 mt-1 space-y-1">
-              <Link href="/admin/payments/pending" className={`block px-3 py-2 text-sm rounded-lg ${pathname === '/admin/payments/pending' ? 'bg-gradient-to-r from-[#00d09c] to-[#7c3aed] text-white' : 'text-gray-300 hover:bg-[#1b2e4b]/40'}`}>Pending Transactions</Link>
-              <Link href="/admin/payments/approved" className={`block px-3 py-2 text-sm rounded-lg ${pathname === '/admin/payments/approved' ? 'bg-gradient-to-r from-[#00d09c] to-[#7c3aed] text-white' : 'text-gray-300 hover:bg-[#1b2e4b]/40'}`}>Approved Transactions</Link>
-              <Link href="/admin/payments/rejected" className={`block px-3 py-2 text-sm rounded-lg ${pathname === '/admin/payments/rejected' ? 'bg-gradient-to-r from-[#00d09c] to-[#7c3aed] text-white' : 'text-gray-300 hover:bg-[#1b2e4b]/40'}`}>Rejected Transactions</Link>
-              <div className="mt-1">
-                <div className="flex items-center justify-between px-3 py-2 text-sm rounded-lg">
-                  <Link href="/admin/payments/renewal" className="text-gray-300">Renewal</Link>
-                  <button aria-label="Toggle Renewal" onClick={() => setExpandRenewal(v => !v)} className="p-1 rounded hover:bg-black/10 text-gray-300">
-                    <FaChevronDown size={12} className={`transition-transform ${expandRenewal ? 'rotate-180' : ''}`} />
-                  </button>
-                </div>
-                {expandRenewal && (
-                  <div className="ml-6 space-y-1">
-                    <Link href="/admin/payments/renewal/pending" className={`block px-3 py-2 text-sm rounded-lg ${pathname === '/admin/payments/renewal/pending' ? 'bg-gradient-to-r from-[#00d09c] to-[#7c3aed] text-white' : 'text-gray-300 hover:bg-[#1b2e4b]/40'}`}>Pending</Link>
-                    <Link href="/admin/payments/renewal/approved" className={`block px-3 py-2 text-sm rounded-lg ${pathname === '/admin/payments/renewal/approved' ? 'bg-gradient-to-r from-[#00d09c] to-[#7c3aed] text-white' : 'text-gray-300 hover:bg-[#1b2e4b]/40'}`}>Approved</Link>
-                    <Link href="/admin/payments/renewal/rejected" className={`block px-3 py-2 text-sm rounded-lg ${pathname === '/admin/payments/renewal/rejected' ? 'bg-gradient-to-r from-[#00d09c] to-[#7c3aed] text-white' : 'text-gray-300 hover:bg-[#1b2e4b]/40'}`}>Rejected</Link>
-                  </div>
-                )}
-              </div>
+              {/* Single Payments link only for admin with no sub-pages as requested */}
+              <Link href="/admin/payments" className={`block px-3 py-2 text-sm rounded-lg ${pathname === '/admin/payments' ? 'bg-gradient-to-r from-[#00d09c] to-[#7c3aed] text-white' : 'text-gray-300 hover:bg-[#1b2e4b]/40'}`}>Payments</Link>
             </div>
           )}
         </div>

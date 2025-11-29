@@ -1,7 +1,8 @@
 'use client';
 
 import Link from 'next/link';
-import { FiGrid, FiTrendingUp, FiActivity, FiCreditCard, FiUser, FiSettings, FiLogOut } from 'react-icons/fi';
+import { FiGrid, FiTrendingUp, FiActivity, FiCreditCard, FiUser, FiSettings, FiLogOut, FiDollarSign } from 'react-icons/fi';
+import { useEffect, useState } from 'react';
 import { usePathname } from 'next/navigation';
 
 type MobileHamburgerMenuProps = {
@@ -12,12 +13,33 @@ type MobileHamburgerMenuProps = {
 
 export default function MobileHamburgerMenu({ open, onClose, onLogout }: MobileHamburgerMenuProps) {
   const pathname = usePathname();
+  const [walletBalance, setWalletBalance] = useState<number | null>(null);
+
+  useEffect(() => {
+    const fetchBalance = async () => {
+      try {
+        const sessionRes = await fetch('/api/auth/session');
+        if (!sessionRes.ok) return;
+        const session = await sessionRes.json();
+        const id = session?.user?.id;
+        if (!id) return;
+        const res = await fetch(`/api/users?id=${encodeURIComponent(id)}`);
+        if (!res.ok) return;
+        const data = await res.json();
+        if (typeof data.user?.wallet_balance === 'number') setWalletBalance(data.user.wallet_balance);
+      } catch (err) {
+        // ignore
+      }
+    };
+    fetchBalance();
+  }, []);
 
   const items = [
     { id: 'dashboard', label: 'Dashboard', path: '/dashboard', icon: <FiGrid className="h-5 w-5" /> },
     { id: 'strategies', label: 'Strategies', path: '/strategies', icon: <FiTrendingUp className="h-5 w-5" /> },
     { id: 'running', label: 'Running', path: '/strategies/running', icon: <FiActivity className="h-5 w-5" /> },
     { id: 'billing', label: 'Billing', path: '/billing', icon: <FiCreditCard className="h-5 w-5" /> },
+    { id: 'wallet', label: 'Wallet', path: '/wallet', icon: <FiDollarSign className="h-5 w-5" /> },
     { id: 'profile', label: 'Profile', path: '/profile', icon: <FiUser className="h-5 w-5" /> },
     { id: 'settings', label: 'Settings', path: '/settings', icon: <FiSettings className="h-5 w-5" /> },
   ];
@@ -33,6 +55,10 @@ export default function MobileHamburgerMenu({ open, onClose, onLogout }: MobileH
         <div className="p-4 border-b border-[#1b2e4b]">
           <div className="text-lg font-semibold">Menu</div>
           <div className="text-xs text-gray-400">Navigate</div>
+        </div>
+        {/* Optional wallet balance display */}
+        <div className="p-4 border-b border-[#1b2e4b]">
+          <div className="text-sm text-gray-300">Wallet: <span className="font-medium text-[#00d09c]">{typeof walletBalance === 'number' ? `$${walletBalance.toFixed(2)}` : '—'}</span></div>
         </div>
 
         <nav className="p-4 space-y-2">
